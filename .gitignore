@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+.idea/
+
+# Los clips reales son cientos de MB y viven en el Volume de Railway, no en
+# git — solo se versiona la estructura de carpetas (.gitkeep) y la playlist.
+media/videos/*
+!media/videos/.gitkeep
+media/audio/*
+!media/audio/.gitkeep

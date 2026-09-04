@@ -31,7 +31,17 @@ logger = logging.getLogger("media_service")
 # Perfil técnico fijo al que se normaliza todo clip antes de sumarlo a la
 # playlist. 1080p30 coincide con lo que ya asume el documento de costos
 # ("1080p30 para contenido institucional y diapositivas").
-PERFIL_VIDEO = ["-c:v", "libx264", "-profile:v", "high", "-r", "30", "-vf", "scale=1920:1080"]
+PERFIL_VIDEO = [
+    "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p",
+    "-r", "30", "-vf", "scale=1920:1080",
+]
+# FIX 2026-09-04: sin "-pix_fmt yuv420p" explícito, libx264 puede terminar
+# heredando el espacio de color del origen (ej. rgb24 o 4:4:4) y el perfil
+# "high" rechaza eso de entrada ("high profile doesn't support 4:4:4") —
+# se vio en la práctica probando con un clip sintético (ffmpeg testsrc).
+# Con clips reales (casi siempre ya en yuv420p) el bug no se nota, pero
+# conviene forzarlo igual: es también el formato más compatible para
+# ingesta RTMP en general.
 PERFIL_AUDIO = ["-c:a", "aac", "-ar", "44100", "-ac", "2"]
 
 

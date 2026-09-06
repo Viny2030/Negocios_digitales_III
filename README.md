@@ -50,18 +50,49 @@ a un servidor RTMP local (ej. `mediamtx`) en vez de a YouTube.
 
 ```
 POST /api/v1/ai/guion   {"tema": "Convocatoria a becas 2027", "contexto": "Inscripción hasta el 30/09"}
-POST /api/v1/ai/voz     {"texto": "...", "nombre_archivo": "becas_2027"}
+POST /api/v1/ai/voz     {"texto": "...", "nombre_archivo": "becas_2027", "voice_id": null}
 ```
 
 Sin `OPENAI_API_KEY`/`ELEVENLABS_API_KEY` configuradas, ambos endpoints
 devuelven un resultado placeholder (texto marcado `[SIMULADO]`, un mp3 de
 silencio) para poder probar el resto del flujo sin tener las cuentas de
-pago dadas de alta todavía.
+pago dadas de alta todavía. `voice_id` es opcional: si no se pasa, usa
+`ELEVENLABS_VOICE_ID` del `.env` — sirve para asignarle una voz distinta a
+cada bloque de la grilla de programación sin tocar el `.env` cada vez.
 
-**Fuera del alcance de este scaffold:** armar el clip de VIDEO final
-(audio generado + placa/fondo + subtítulos) para sumarlo a la playlist —
-es un paso de edición con FFmpeg que conviene encarar una vez que se
-valide que los guiones/voces generados sirven tal cual.
+## Armar un clip completo (guion + voz + video) y sumarlo a la playlist
+
+```
+POST /api/v1/ai/clip
+{
+  "tema": "Convocatoria a becas 2027",
+  "contexto": "Inscripción hasta el 30/09",
+  "nombre_archivo": "becas_2027",
+  "voice_id": null,
+  "imagen_fondo": null,
+  "color_fondo": "black",
+  "agregar_a_playlist": true
+}
+```
+
+Encadena `/guion` → `/voz` → armado del clip de video (audio narrado +
+fondo) → alta en la playlist, todo en una sola llamada. Pensado para
+probar un bloque de la grilla de punta a punta (ej. "UMSA Despierta")
+antes de escalar a los seis bloques.
+
+`imagen_fondo` es la ruta (en el servidor) a una placa o fondo
+institucional ya preparado; si no se pasa, el clip se arma con un fondo
+de color sólido (`color_fondo`, por defecto negro) — útil para probar el
+pipeline antes de tener las placas gráficas definitivas. Si el clip ya
+estaba en la playlist, `en_playlist` da `true` igual (no es un error).
+
+Si el streamer ya está corriendo, después de agregar un clip hace falta
+`POST /api/v1/stream/reload` para que lo tome (corta la señal un par de
+segundos, ver limitación documentada en `core/streamer.py`).
+
+**Todavía pendiente** (no cubierto por `/clip`): subtítulos automáticos y
+placas dinámicas con datos en tiempo real (fecha, clima, agenda en
+pantalla) — hoy el fondo es estático (imagen fija o color).
 
 ## Deploy en Railway
 

@@ -76,6 +76,55 @@ def probar_clip(path: Path) -> dict:
     }
 
 
+def armar_clip_narrado(
+    audio_path: Path,
+    destino: Path,
+    imagen_fondo: Path | None = None,
+    color_fondo: str = "black",
+) -> Path:
+    """Arma un clip de video a partir de un audio narrado (ver
+    services/ai_service.generar_voz) y un fondo fijo: una imagen (placa
+    institucional) si se pasa `imagen_fondo`, o un color sólido generado
+    con el filtro `lavfi` si todavía no hay una placa/fondo real para ese
+    contenido.
+
+    Este era el paso que quedaba pendiente en el scaffold inicial (ver el
+    docstring anterior de api/v1/ai_generator.py): conecta guion + voz con
+    la playlist real, para poder probar un bloque de la grilla de punta a
+    punta (ej. "UMSA Despierta") sin depender de que ya exista el video
+    institucional definitivo — cuando haya placas/fondos reales, basta con
+    pasar `imagen_fondo` en vez de dejarlo en None.
+
+    Codifica directo al PERFIL_VIDEO/PERFIL_AUDIO fijo del proyecto — no
+    hace falta pasar el resultado por normalizar_clip() después, ya sale
+    compatible con el `-c copy` del streamer apenas se agrega a la
+    playlist.
+    """
+    destino.parent.mkdir(parents=True, exist_ok=True)
+
+    if imagen_fondo is not None:
+        entrada_video = ["-loop", "1", "-i", str(imagen_fondo)]
+    else:
+        entrada_video = ["-f", "lavfi", "-i", f"color=c={color_fondo}:s=1920x1080:r=30"]
+
+    comando = [
+        settings.ffmpeg_bin, "-y",
+        *entrada_video,
+        "-i", str(audio_path),
+        *PERFIL_VIDEO, *PERFIL_AUDIO,
+        "-shortest",  # corta cuando termina el audio (la imagen/color son "infinitos")
+        str(destino),
+    ]
+    logger.info(
+        f"Armando clip narrado {destino.name} "
+        f"(fondo={'imagen ' + imagen_fondo.name if imagen_fondo else color_fondo})"
+    )
+    resultado = subprocess.run(comando, capture_output=True, text=True)
+    if resultado.returncode != 0:
+        raise MediaValidationError(f"ffmpeg no pudo armar el clip {destino.name}: {resultado.stderr[-800:]}")
+    return destino
+
+
 def normalizar_clip(origen: Path, destino: Path) -> Path:
     """Recodifica `origen` al perfil técnico fijo y lo guarda en `destino`.
     Idempotente: si `destino` ya existe, no vuelve a recodificar."""

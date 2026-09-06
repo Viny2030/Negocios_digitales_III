@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     playlist_path: Path = Path("media/playlist.txt")
 
     # --- LLM (guiones) ---
+    # generar_guion() prueba Anthropic primero si anthropic_api_key está
+    # seteada; si no, cae a OpenAI; si tampoco hay OpenAI, devuelve un guion
+    # [SIMULADO] (ver services/ai_service.py).
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-5"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
 

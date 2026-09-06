@@ -1,1 +1,2 @@
 file 'clip_prueba.mp4'
+file 'videos/prueba_fondo_umsa.mp4'

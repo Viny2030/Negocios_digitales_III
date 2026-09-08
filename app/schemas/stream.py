@@ -23,3 +23,10 @@ class StreamCommand(BaseModel):
 class ActionResult(BaseModel):
     ok: bool
     detail: str
+
+
+class ScheduleStatus(BaseModel):
+    """Estado del selector automático de bloque horario — ver core/scheduler.py."""
+    corriendo: bool
+    bloque_actual: str | None = None
+    bloque_calculado_ahora: str

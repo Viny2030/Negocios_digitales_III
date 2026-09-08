@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     media_dir: Path = Path("media/videos")
     playlist_path: Path = Path("media/playlist.txt")
 
+    # --- Grilla horaria automática (ver core/scheduler.py) ---
+    # SCHEDULER_ENABLED=true (default) mantiene playlist.txt sincronizada con
+    # el bloque horario de la grilla de 24hs (ver
+    # Claude outputs/plan_contenido_canal_umsa.md) sin intervención manual.
+    # Ponelo en false si querés armar la playlist a mano (POST /api/v1/playlist)
+    # sin que el scheduler te la pise en el próximo cambio de bloque.
+    scheduler_enabled: bool = True
+
     # --- LLM (guiones) ---
     # generar_guion() prueba Anthropic primero si anthropic_api_key está
     # seteada; si no, cae a OpenAI; si tampoco hay OpenAI, devuelve un guion

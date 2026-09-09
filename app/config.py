@@ -50,10 +50,15 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
 
-    # --- TTS (voz) ---
-    elevenlabs_api_key: str = ""
-    elevenlabs_voice_id: str = ""
-    elevenlabs_model_id: str = "eleven_multilingual_v2"
+    # --- TTS (voz) — Piper: motor neuronal local (pip install piper-tts),
+    # sin costo ni cuota. generar_voz() en services/ai_service.py busca el
+    # modelo <voice_id o piper_voice_default>.onnx (+ su .onnx.json) dentro
+    # de tts_models_dir; si no lo encuentra, cae a un wav de silencio (mismo
+    # comportamiento de placeholder que antes con ElevenLabs cuando faltaba
+    # la API key, para no bloquear el resto del pipeline).
+    piper_bin: str = "piper"
+    tts_models_dir: Path = Path("media/tts")
+    piper_voice_default: str = "es_AR-daniela-high"
     audio_dir: Path = Path("media/audio")
 
     log_level: str = "INFO"
@@ -62,4 +67,5 @@ class Settings(BaseSettings):
 settings = Settings()
 settings.media_dir.mkdir(parents=True, exist_ok=True)
 settings.audio_dir.mkdir(parents=True, exist_ok=True)
+settings.tts_models_dir.mkdir(parents=True, exist_ok=True)
 settings.playlist_path.parent.mkdir(parents=True, exist_ok=True)

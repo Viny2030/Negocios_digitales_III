@@ -38,8 +38,8 @@ class GuionResponse(BaseModel):
 
 class VozRequest(BaseModel):
     texto: str
-    nombre_archivo: str  # sin extensión — se guarda como <nombre_archivo>.mp3
-    voice_id: str | None = None  # pisa ELEVENLABS_VOICE_ID del .env para esta llamada puntual
+    nombre_archivo: str  # sin extensión — se guarda como <nombre_archivo>.wav
+    voice_id: str | None = None  # nombre de un modelo Piper ya descargado; pisa PIPER_VOICE_DEFAULT del .env para esta llamada puntual
 
 
 class VozResponse(BaseModel):
@@ -50,7 +50,7 @@ class ClipRequest(BaseModel):
     tema: str
     contexto: str | None = None
     nombre_archivo: str  # sin extensión — nombre base para el .mp3 y el .mp4 resultantes
-    voice_id: str | None = None  # voz de ElevenLabs para este bloque (ver plan de contenido)
+    voice_id: str | None = None  # modelo de voz Piper para este bloque (ver plan de contenido)
     imagen_fondo: str | None = None  # ruta a una placa/fondo institucional ya subida al servidor
     color_fondo: str = "black"  # se usa solo si no se pasa imagen_fondo
     agregar_a_playlist: bool = True

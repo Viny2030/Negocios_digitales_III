@@ -1,13 +1,13 @@
 """
 services/ai_service.py — Integración con el LLM (guiones) y TTS (voz).
 
-Ninguna de las dos funciones explota si falta la API key correspondiente:
-devuelven un resultado placeholder bien marcado como tal (`[SIMULADO]`) y
-lo loguean como warning. Esto permite levantar y probar el resto del
-servicio (streaming, playlist) sin tener todavía las cuentas de Anthropic/
-OpenAI/ElevenLabs dadas de alta — algo útil en la Fase 1/2 del plan de
-implementación del documento, antes de tener los costos variables
-aprobados.
+Ninguna de las dos funciones explota si falta lo necesario para generar el
+resultado real: devuelven un resultado placeholder bien marcado como tal
+(`[SIMULADO]` para el guion, un wav de silencio para la voz) y lo loguean
+como warning. Esto permite levantar y probar el resto del servicio
+(streaming, playlist) sin tener todavía las cuentas/modelos dados de
+alta — algo útil en la Fase 1/2 del plan de implementación del documento,
+antes de tener los costos variables aprobados.
 
 FIX 2026-09-06: se agregó Anthropic como proveedor de guiones porque la
 cuenta de OpenAI se quedó sin crédito (`openai.RateLimitError:
@@ -17,13 +17,24 @@ contemplada (a diferencia de "falta la key", que sí tiene el fallback
 `generar_guion()` ahora prueba Anthropic primero si ANTHROPIC_API_KEY está
 seteada, y solo cae a OpenAI si no lo está — así no dependemos de una sola
 cuenta con crédito.
+
+FIX 2026-09-09: se sacó ElevenLabs como proveedor de voz — con la cuota de
+caracteres del plan agotada a mitad de la carga de bloques, `generar_voz()`
+tiraba `httpx.HTTPStatusError: 401 Unauthorized` sin controlar (mismo tipo
+de problema que el fix anterior con OpenAI, pero acá no había fallback:
+401 no es "falta la key", así que no caía al placeholder). En su lugar,
+`generar_voz()` ahora usa Piper (`piper-tts`, ver requirements.txt): un
+motor de TTS neuronal que corre 100% local, sin key ni cuota — no hay
+límite que se pueda agotar a mitad de una tanda. El modelo de voz (.onnx +
+.onnx.json) se descarga una sola vez a mano a `tts_models_dir` (ver
+README, sección "Generar guion + voz con IA"); si no está, cae al mismo
+placeholder de silencio que antes.
 """
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
-
-import httpx
 
 from app.config import settings
 
@@ -95,35 +106,38 @@ def _generar_guion_openai(tema: str, contexto: str | None = None) -> str:
 
 
 def generar_voz(texto: str, nombre_archivo: str, voice_id: str | None = None) -> Path:
-    """Convierte `texto` a audio con ElevenLabs y lo guarda en
-    settings.audio_dir / nombre_archivo (con extensión .mp3).
+    """Convierte `texto` a audio con Piper (TTS neuronal local, sin key ni
+    cuota) y lo guarda en settings.audio_dir / nombre_archivo (extensión
+    .wav — da igual para el resto del pipeline, armar_clip_narrado() se lo
+    pasa a ffmpeg como entrada de audio y ffmpeg detecta el formato solo).
 
-    `voice_id` permite pisar puntualmente el ELEVENLABS_VOICE_ID del .env.
-    Pensado para cuando cada bloque de la grilla de programación tenga su
-    propia voz asignada (ej. una voz para "UMSA Despierta" y otra para
-    "Espacio Posgrados y Negocios") sin tener que reconfigurar el .env en
-    cada llamada — ver plan de contenido del canal.
+    `voice_id`, si se pasa, es el nombre de un modelo de voz Piper ya
+    descargado en tts_models_dir (ej. "es_AR-daniela-high", sin extensión)
+    que pisa puntualmente PIPER_VOICE_DEFAULT del .env — pensado para
+    cuando cada bloque de la grilla tenga su propia voz asignada (ej. una
+    voz para "UMSA Despierta" y otra para "Espacio Posgrados y Negocios")
+    sin tener que reconfigurar el .env en cada llamada, igual que antes
+    con ELEVENLABS_VOICE_ID — ver plan de contenido del canal.
 
-    Devuelve el Path del archivo generado. Si falta la API key o el
-    voice_id (ni el del .env ni el pasado acá), genera igual un archivo
-    (silencio corto vía ffmpeg) para que el resto del pipeline (armar el
-    clip final) no tenga que manejar un caso especial de "sin audio" —
-    solo hay que acordarse de que ese archivo es un placeholder, se
-    loguea como warning.
+    Devuelve el Path del archivo generado. Si el modelo (<voz>.onnx) no
+    está descargado en tts_models_dir, genera igual un archivo (silencio
+    corto vía ffmpeg) para que el resto del pipeline (armar el clip final)
+    no tenga que manejar un caso especial de "sin audio" — solo hay que
+    acordarse de que ese archivo es un placeholder, se loguea como warning.
     """
-    destino = settings.audio_dir / f"{nombre_archivo}.mp3"
+    destino = settings.audio_dir / f"{nombre_archivo}.wav"
     destino.parent.mkdir(parents=True, exist_ok=True)
 
-    voice_id_efectivo = voice_id or settings.elevenlabs_voice_id
+    voz = voice_id or settings.piper_voice_default
+    modelo = settings.tts_models_dir / f"{voz}.onnx"
 
-    if not settings.elevenlabs_api_key or not voice_id_efectivo:
+    if not modelo.exists():
         logger.warning(
-            "ELEVENLABS_API_KEY o el voice_id (ni el del .env ni el pasado a "
-            f"generar_voz) están seteados — generando un mp3 de silencio "
-            f"como placeholder en {destino}"
+            f"Modelo Piper '{voz}' no encontrado en {settings.tts_models_dir} "
+            f"(esperaba {modelo.name} + {modelo.name}.json) — generando un wav "
+            f"de silencio como placeholder en {destino}. Ver README para "
+            f"descargar el modelo."
         )
-        import subprocess
-
         subprocess.run(
             [settings.ffmpeg_bin, "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
              "-t", "3", str(destino)],
@@ -131,12 +145,8 @@ def generar_voz(texto: str, nombre_archivo: str, voice_id: str | None = None) ->
         )
         return destino
 
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id_efectivo}"
-    headers = {"xi-api-key": settings.elevenlabs_api_key, "Content-Type": "application/json"}
-    payload = {"text": texto, "model_id": settings.elevenlabs_model_id}
-
-    with httpx.Client(timeout=60.0) as client:
-        respuesta = client.post(url, headers=headers, json=payload)
-    respuesta.raise_for_status()
-    destino.write_bytes(respuesta.content)
+    comando = [settings.piper_bin, "-m", str(modelo), "-f", str(destino)]
+    resultado = subprocess.run(comando, input=texto, capture_output=True, text=True, encoding="utf-8")
+    if resultado.returncode != 0:
+        raise RuntimeError(f"piper no pudo generar la voz para {nombre_archivo}: {resultado.stderr[-800:]}")
     return destino

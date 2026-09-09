@@ -53,12 +53,35 @@ POST /api/v1/ai/guion   {"tema": "Convocatoria a becas 2027", "contexto": "Inscr
 POST /api/v1/ai/voz     {"texto": "...", "nombre_archivo": "becas_2027", "voice_id": null}
 ```
 
-Sin `OPENAI_API_KEY`/`ELEVENLABS_API_KEY` configuradas, ambos endpoints
-devuelven un resultado placeholder (texto marcado `[SIMULADO]`, un mp3 de
-silencio) para poder probar el resto del flujo sin tener las cuentas de
-pago dadas de alta todavía. `voice_id` es opcional: si no se pasa, usa
-`ELEVENLABS_VOICE_ID` del `.env` — sirve para asignarle una voz distinta a
-cada bloque de la grilla de programación sin tocar el `.env` cada vez.
+Guion: sin `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` configuradas, devuelve un
+texto placeholder marcado `[SIMULADO]` para poder probar el resto del
+flujo sin tener las cuentas dadas de alta todavía.
+
+Voz: se genera con [Piper](https://github.com/OHF-Voice/piper1-gpl) — TTS
+neuronal que corre 100% local, sin API key ni cuota (así no se corta la
+carga de un bloque entero a mitad de camino si se agota un plan pago, como
+pasó con ElevenLabs — ver el FIX 2026-09-09 en `services/ai_service.py`).
+Hace falta instalar el paquete y descargar el modelo de voz una sola vez:
+
+```bash
+pip install piper-tts   # ya está en requirements.txt
+mkdir media\tts         # o el TTS_MODELS_DIR que hayas configurado
+```
+
+Descargar `es_AR-daniela-high.onnx` y `es_AR-daniela-high.onnx.json` (voz
+en español rioplatense, acorde al tono del canal — ver `PROMPT_SISTEMA` en
+`ai_service.py`) a `media/tts/`, desde
+[huggingface.co/rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices/tree/main/es/es_AR/daniela/high)
+(o con `py -m piper.download_voices es_AR-daniela-high`, que los descarga
+al directorio actual — moverlos después a `media/tts/`).
+
+Sin el modelo descargado, `POST /api/v1/ai/voz` (y por lo tanto también
+`/ai/clip`) devuelve igual un wav de silencio como placeholder, para poder
+probar el resto del flujo sin tener el modelo bajado todavía. `voice_id`
+es opcional: si no se pasa, usa `PIPER_VOICE_DEFAULT` del `.env` — sirve
+para asignarle una voz distinta a cada bloque de la grilla de
+programación (con su propio modelo descargado) sin tocar el `.env` cada
+vez.
 
 ## Armar un clip completo (guion + voz + video) y sumarlo a la playlist
 

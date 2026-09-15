@@ -17,6 +17,12 @@ ya está corriendo; no arranca la emisión por sí solo. Desactivalo en
 desarrollo (SCHEDULER_ENABLED=false) si querés armar la playlist a mano vía
 POST /api/v1/playlist sin que el scheduler te la pise en el próximo cambio
 de bloque.
+
+WATCHDOG_ENABLED (ver .env.example, default true): arranca el watchdog
+(core/watchdog.py) que reinicia el streamer solo si se cae inesperadamente
+mientras se suponía que tenía que seguir transmitiendo — necesario para que
+la emisión sea de verdad PERMANENTE y no dependa de que alguien note un
+corte y llame a POST /stream/start a mano.
 """
 from __future__ import annotations
 
@@ -29,6 +35,7 @@ from app.api.v1.router import router as router_v1
 from app.config import settings
 from app.core.scheduler import scheduler
 from app.core.streamer import streamer
+from app.core.watchdog import watchdog
 
 logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("main")
@@ -38,6 +45,8 @@ logger = logging.getLogger("main")
 async def lifespan(app: FastAPI):
     if settings.scheduler_enabled:
         scheduler.start()
+    if settings.watchdog_enabled:
+        watchdog.start()
     if settings.autostart:
         try:
             logger.info("AUTOSTART=true — arrancando el streamer al levantar el servicio")
@@ -45,7 +54,8 @@ async def lifespan(app: FastAPI):
         except RuntimeError as e:
             logger.error(f"No se pudo autostart-ear el streamer: {e}")
     yield
-    logger.info("Apagando servicio — deteniendo el streamer y el scheduler si estaban corriendo")
+    logger.info("Apagando servicio — deteniendo el streamer, el scheduler y el watchdog si estaban corriendo")
+    watchdog.stop()
     scheduler.stop()
     streamer.stop()
 

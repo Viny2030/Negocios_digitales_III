@@ -1,0 +1,34 @@
+.git
+.github
+.idea
+.venv
+venv
+env
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+
+# Secretos locales — en Railway las variables se cargan desde el
+# dashboard/CLI, nunca desde un .env copiado a la imagen.
+.env
+.env.*
+!.env.example
+
+# Herramienta de prueba local (servidor RTMP de escritorio para Windows) —
+# no forma parte del servicio que corre en el contenedor.
+mediamtx/
+mediamtx.zip
+
+# Documentación y scripts de operación local — no hacen falta dentro de la imagen.
+README.md
+Claude outputs
+*.ps1
+
+# Clips/audios reales pesados: viven en el Volume de Railway o se copian
+# por otra vía (ver README) — la imagen solo necesita la estructura vacía.
+media/videos/*
+!media/videos/.gitkeep
+media/audio/*
+!media/audio/.gitkeep
+media/tts/*

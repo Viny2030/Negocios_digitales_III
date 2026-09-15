@@ -1,3 +1,11 @@
+# Cambiá $ApiBase a la URL de Railway para correr esto contra producción.
+# Si configuraste ADMIN_TOKEN, seteá $env:ADMIN_TOKEN antes de correr el
+# script; si no, dejalo vacío (funciona igual que antes en local).
+$ApiBase = "http://127.0.0.1:8000"
+$AdminToken = $env:ADMIN_TOKEN
+$Headers = @{}
+if ($AdminToken) { $Headers["X-Admin-Token"] = $AdminToken }
+
 $clips = @(
     @{ tema="Licenciatura en Negocios Digitales en la UMSA"; nombre_archivo="foco_grado_negocios_digitales";
        contexto="Dura 4 anios en modalidad virtual y otorga el titulo de Licenciado/a en Negocios Digitales. Combina contenidos economicos, administrativos y juridicos con competencias digitales: programacion basica y tecnologia aplicada. Tambien incluye formacion en habilidades blandas como liderazgo digital y autoconocimiento. Los egresados pueden desempenarse como lider de transformacion digital, consultor en estrategia digital, product manager, especialista en marketing digital, analista de business intelligence o emprendedor digital." },
@@ -30,7 +38,7 @@ foreach ($clip in $clips) {
 
     Write-Host "Generando: $($clip.nombre_archivo) ..." -ForegroundColor Cyan
     try {
-        $resp = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/ai/clip" -Method Post -Body $bytes -ContentType "application/json; charset=utf-8"
+        $resp = Invoke-RestMethod -Uri "$ApiBase/api/v1/ai/clip" -Method Post -Body $bytes -ContentType "application/json; charset=utf-8" -Headers $Headers
         Write-Host "  OK -> en_playlist: $($resp.en_playlist)" -ForegroundColor Green
     } catch {
         Write-Host "  ERROR en $($clip.nombre_archivo): $_" -ForegroundColor Red

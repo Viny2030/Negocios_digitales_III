@@ -30,3 +30,10 @@ class ScheduleStatus(BaseModel):
     corriendo: bool
     bloque_actual: str | None = None
     bloque_calculado_ahora: str
+
+
+class WatchdogStatus(BaseModel):
+    """Estado del watchdog que reinicia el streamer si se cae solo — ver core/watchdog.py."""
+    corriendo: bool
+    reintentos_recientes: int
+    agotado: bool

@@ -1,3 +1,13 @@
+# Cambiá $ApiBase a la URL de Railway para correr esto contra producción en
+# vez de tu servidor local. Si configuraste ADMIN_TOKEN (ver .env.example y
+# la sección "Proteger la API" del README), seteá $env:ADMIN_TOKEN antes de
+# correr el script (`$env:ADMIN_TOKEN = "tu-token"`) — si no, dejalo vacío
+# y el header simplemente no se manda (funciona igual que antes en local).
+$ApiBase = "http://127.0.0.1:8000"
+$AdminToken = $env:ADMIN_TOKEN
+$Headers = @{}
+if ($AdminToken) { $Headers["X-Admin-Token"] = $AdminToken }
+
 $clips = @(
     @{ tema="Carrera de Abogacia en la UMSA"; nombre_archivo="foco_grado_abogacia";
        contexto="Es una carrera de 5 anios que otorga el titulo de Abogado/a. Modalidad presencial o virtual. Prepara para patrocinar y representar a las partes en procedimientos judiciales y administrativos, ejercer funciones jurisdiccionales, emitir dictamenes juridicos y actuar como sindico en sociedades. El plan de estudios tiene fuerte formacion practica: talleres de litigacion, redaccion de escritos judiciales, analisis jurisprudencial y clinicas legales que simulan el ejercicio profesional real, ademas de incorporar herramientas de inteligencia artificial y gestion documental." },
@@ -48,7 +58,7 @@ foreach ($clip in $clips) {
 
     Write-Host "Generando: $($clip.nombre_archivo) ..." -ForegroundColor Cyan
     try {
-        $resp = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/ai/clip" -Method Post -Body $bytes -ContentType "application/json; charset=utf-8"
+        $resp = Invoke-RestMethod -Uri "$ApiBase/api/v1/ai/clip" -Method Post -Body $bytes -ContentType "application/json; charset=utf-8" -Headers $Headers
         Write-Host "  OK -> en_playlist: $($resp.en_playlist)" -ForegroundColor Green
     } catch {
         Write-Host "  ERROR en $($clip.nombre_archivo): $_" -ForegroundColor Red

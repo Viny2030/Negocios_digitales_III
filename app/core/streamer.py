@@ -55,6 +55,12 @@ class FFmpegStreamer:
         self._estado = _EstadoStreamer()
         self._lock = threading.Lock()
         self._reader_thread: threading.Thread | None = None
+        # Flag para el watchdog (ver core/watchdog.py): True mientras se
+        # supone que el streamer tiene que estar transmitiendo (lo pusimos
+        # a correr con start()/reload() y nadie pidió stop() explícito).
+        # Distingue un ffmpeg que se cayó SOLO (hay que reiniciarlo) de uno
+        # que está parado A PROPÓSITO (no hay que tocarlo).
+        self._debe_estar_corriendo = False
 
     def _comando_ffmpeg(self) -> list[str]:
         if not settings.rtmp_stream_key:
@@ -102,6 +108,7 @@ class FFmpegStreamer:
                 stderr=subprocess.PIPE,
             )
             self._estado = _EstadoStreamer(proceso=proceso, started_at=datetime.now(timezone.utc))
+            self._debe_estar_corriendo = True
             self._reader_thread = threading.Thread(
                 target=self._leer_stderr, args=(proceso,), daemon=True
             )
@@ -110,6 +117,7 @@ class FFmpegStreamer:
     def stop(self, timeout: float = 10.0) -> None:
         with self._lock:
             proceso = self._estado.proceso
+            self._debe_estar_corriendo = False  # parada intencional — el watchdog no debe reiniciarlo
         if proceso is None or proceso.poll() is not None:
             return  # ya estaba parado, no es un error
         proceso.terminate()  # SIGTERM — le da tiempo a ffmpeg a cerrar el stream prolijo
@@ -119,6 +127,12 @@ class FFmpegStreamer:
             logger.warning("ffmpeg no respondió a SIGTERM a tiempo — forzando con SIGKILL")
             proceso.kill()
             proceso.wait()
+
+    def debe_estar_corriendo(self) -> bool:
+        """Usado por el watchdog (ver core/watchdog.py) para distinguir un
+        ffmpeg caído solo (hay que reiniciarlo) de uno parado a propósito."""
+        with self._lock:
+            return self._debe_estar_corriendo
 
     def reload(self) -> None:
         """Reinicia el proceso para que relea la playlist. Ver limitación en

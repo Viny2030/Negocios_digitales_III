@@ -119,16 +119,72 @@ pantalla) — hoy el fondo es estático (imagen fija o color).
 
 ## Deploy en Railway
 
-1. Compilar la imagen con el `Dockerfile` y subirla a Docker Hub (ver nota
-   de costos: así Railway no gasta minutos de build).
+1. **Imagen Docker**: cada push a `main` la compila y sube sola a Docker
+   Hub vía `.github/workflows/docker-build-push.yml` (así Railway no gasta
+   minutos de build) — requiere los secrets `DOCKERHUB_USERNAME` y
+   `DOCKERHUB_TOKEN` cargados en GitHub (Settings → Secrets and variables →
+   Actions; el token se genera en Docker Hub → Account Settings → Security
+   → New Access Token, permiso Read & Write). La imagen queda en
+   `<DOCKERHUB_USERNAME>/negocios-digitales-iii:latest`.
 2. Servicio en Railway apuntando a esa imagen, con un Volume montado en
    `/srv/media/videos` (persistente entre deploys — ahí van los clips
-   reales, no en la imagen).
-3. Variables de entorno: todas las de `.env.example`, con
-   `AUTOSTART=true`.
+   reales, no en la imagen). El modelo de voz Piper (`es_AR-daniela-high`)
+   ya viene horneado en la imagen en `/srv/tts_models` (ver `Dockerfile`) —
+   **no** hace falta (ni conviene) que el Volume cubra esa carpeta también:
+   un Volume nuevo empieza vacío y taparía el modelo horneado con un
+   directorio en blanco en el primer deploy.
+3. Variables de entorno: todas las de `.env.example`, con `AUTOSTART=true`,
+   `TTS_MODELS_DIR=/srv/tts_models` (para que apunte al modelo horneado en
+   vez del default local `media/tts`), y **`ADMIN_TOKEN` con un valor
+   propio** (ver "Proteger la API" más abajo — sin esto, la URL pública
+   queda abierta para cualquiera).
 4. A diferencia de un cron: este servicio tiene que quedar **siempre
    corriendo** (no es un job que termina), porque es el propio proceso
-   FastAPI + ffmpeg el que sostiene la emisión 24/7.
+   FastAPI + ffmpeg el que sostiene la emisión 24/7. `railway.toml` ya deja
+   `numReplicas = 1` fijo a propósito: dos réplicas empujarían dos streams
+   ffmpeg a la misma `RTMP_STREAM_KEY`, y YouTube rechaza o corta
+   conexiones duplicadas a la misma clave en vez de duplicar la señal.
+
+## Proteger la API (`ADMIN_TOKEN`)
+
+La API controla una transmisión en vivo y dispara llamadas pagas a
+Anthropic/OpenAI — sin protección, cualquiera que tenga la URL pública de
+Railway podría cortar el stream (`POST /stream/stop`) o gastar tu cuota de
+IA llamando a `/ai/clip` en loop.
+
+Configurando `ADMIN_TOKEN` en el entorno, estos endpoints exigen el header
+`X-Admin-Token: <valor>`:
+
+- `POST /stream/start|stop|reload`, `POST /stream/schedule/force`
+- `POST /playlist`, `PUT /playlist/reorder`, `DELETE /playlist/{filename}`
+- Todo `/ai/*` (`/guion`, `/voz`, `/clip`)
+
+Quedan **públicos** (sin token) por ser de solo lectura y no costar nada:
+`GET /stream/status`, `GET /stream/schedule`, `GET /stream/watchdog`,
+`GET /playlist`. Vacío/sin configurar (default) = sin protección, para no
+romper el flujo de desarrollo local ni Swagger mientras no se necesite.
+
+Los scripts `.ps1` (`cargar_bloques.ps1`, etc.) ya soportan mandar el
+header: seteá `$env:ADMIN_TOKEN = "tu-token"` antes de correrlos (o dejalo
+vacío para seguir usándolos en local sin token).
+
+## Watchdog del streamer (resiliencia 24/7)
+
+Si `ffmpeg` se cae solo — un corte de red hacia YouTube, un frame corrupto
+que lo hace abortar — el watchdog (`app/core/watchdog.py`) lo detecta y lo
+reinicia automáticamente, sin esperar a que alguien note el corte y llame
+a `POST /stream/start` a mano. Se activa solo (`WATCHDOG_ENABLED=true`
+default) y chequea cada `WATCHDOG_CHECK_INTERVAL_SEG` (15s default).
+
+Tiene un techo de reintentos por ventana de tiempo
+(`WATCHDOG_MAX_REINTENTOS=5` cada `WATCHDOG_VENTANA_SEG=600` por default)
+para no quedar en un loop infinito si `ffmpeg` sigue muriendo (ej.
+`RTMP_STREAM_KEY` inválida) — pasado el techo, deja de insistir y loguea
+`CRITICAL` hasta un `POST /stream/start` manual. Ver estado en
+`GET /api/v1/stream/watchdog` (`agotado: true` = necesita intervención).
+
+No reemplaza `reload()` (cambio de bloque horario del scheduler): eso es
+un reinicio intencional; el watchdog solo actúa ante una caída inesperada.
 
 ## Decisiones técnicas a tener en cuenta
 
@@ -142,3 +198,17 @@ pantalla) — hoy el fondo es estático (imagen fija o color).
   estabilidad innecesario para este alcance. Se copian directo a
   `media/videos/` (o al Volume de Railway) por otra vía (SFTP, `rsync`,
   panel de Railway).
+- **`mediamtx/` y `mediamtx.zip` no se versionan** (ver `.gitignore`): es
+  un servidor RTMP de escritorio para Windows, usado solo para probar el
+  streamer localmente sin gastar cuota de YouTube — no forma parte del
+  servicio que corre en el contenedor. Si ya estaban commiteados antes de
+  este cambio, sacarlos del tracking (`git rm -r --cached mediamtx
+  mediamtx.zip`) además de agregarlos al `.gitignore`, para no seguir
+  subiendo 80MB+ en cada push.
+- **Rotar credenciales que hayan circulado fuera del `.env`**: si en algún
+  momento tu `ANTHROPIC_API_KEY` o tu `RTMP_STREAM_KEY` (clave de
+  transmisión de YouTube Live) quedaron pegadas en un chat, un mensaje o
+  cualquier lugar fuera de tu `.env` local, conviene rotarlas antes de usar
+  el proyecto en producción — Anthropic Console para la primera,
+  YouTube Studio → Configuración de transmisión → restablecer clave para
+  la segunda.

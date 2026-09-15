@@ -31,9 +31,22 @@ logger = logging.getLogger("media_service")
 # Perfil técnico fijo al que se normaliza todo clip antes de sumarlo a la
 # playlist. 1080p30 coincide con lo que ya asume el documento de costos
 # ("1080p30 para contenido institucional y diapositivas").
+#
+# FIX 2026-09-09: el filtro de escala era "scale=1920:1080" a secas, que
+# estira la imagen para llenar el cuadro sin respetar el aspect ratio
+# original. No se notaba porque el único fondo que existía hasta ahora
+# (umsa_fondo.png) ya venía en 16:9. Al sumar como fondo una captura real
+# de cada página de umsa.edu.ar (ver services/ai_service.py y
+# api/v1/ai_generator.py) aparecieron imágenes verticales o casi cuadradas
+# (ej. la nota de "vinculación institucional" o la placa de Bioética) que
+# con el filtro viejo salían deformadas. Ahora se escala respetando el
+# aspect ratio original (force_original_aspect_ratio=decrease) y se
+# rellena el resto del cuadro 1920x1080 con barras negras (pad) en vez de
+# estirar — mismo resultado que antes para un fondo que ya es 16:9.
 PERFIL_VIDEO = [
     "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p",
-    "-r", "30", "-vf", "scale=1920:1080",
+    "-r", "30",
+    "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black",
 ]
 # FIX 2026-09-04: sin "-pix_fmt yuv420p" explícito, libx264 puede terminar
 # heredando el espacio de color del origen (ej. rgb24 o 4:4:4) y el perfil

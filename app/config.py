@@ -41,6 +41,32 @@ class Settings(BaseSettings):
     # sin que el scheduler te la pise en el próximo cambio de bloque.
     scheduler_enabled: bool = True
 
+    # --- Watchdog del streamer (ver core/watchdog.py) ---
+    # Si ffmpeg se cae solo (corte de red hacia YouTube, frame corrupto,
+    # etc.) mientras se suponía que tenía que seguir transmitiendo, el
+    # watchdog lo reinicia automáticamente — sin esto, la señal queda caída
+    # hasta que alguien lo note y llame a POST /stream/start a mano, algo
+    # inaceptable para un canal pensado para emisión PERMANENTE 24/7.
+    watchdog_enabled: bool = True
+    watchdog_check_interval_seg: int = 15
+    # Techo de reintentos por ventana de tiempo, para no quedar en un loop
+    # de reinicios infinito si ffmpeg sigue muriendo (ej. stream key
+    # inválida) — pasado el techo, el watchdog deja de insistir y loguea
+    # CRITICAL hasta un POST /stream/start manual (que resetea el contador).
+    watchdog_max_reintentos: int = 5
+    watchdog_ventana_seg: int = 600
+
+    # --- Seguridad ---
+    # Si se define, protege con el header 'X-Admin-Token' los endpoints que
+    # controlan el stream en vivo (/stream/start|stop|reload|schedule/force),
+    # la playlist (altas/bajas/reorder) y la generación de contenido con IA
+    # (/ai/*, que consume créditos pagos de Anthropic/OpenAI). Vacío/None
+    # (default) = sin protección — cómodo en desarrollo local, pero
+    # OBLIGATORIO configurar un valor propio en Railway: esa URL es pública
+    # y sin este token cualquiera podría cortar la transmisión o gastar la
+    # cuota de IA llamando a /ai/clip en loop.
+    admin_token: str = ""
+
     # --- LLM (guiones) ---
     # generar_guion() prueba Anthropic primero si anthropic_api_key está
     # seteada; si no, cae a OpenAI; si tampoco hay OpenAI, devuelve un guion

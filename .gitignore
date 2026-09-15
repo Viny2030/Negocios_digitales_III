@@ -10,3 +10,14 @@ media/videos/*
 !media/videos/.gitkeep
 media/audio/*
 !media/audio/.gitkeep
+
+# Modelo de voz Piper (.onnx, ~100MB+): se hornea en la imagen Docker (ver
+# Dockerfile) o se descarga a mano en desarrollo — no se versiona en git.
+media/tts/*
+!media/tts/.gitkeep
+
+# mediamtx: servidor RTMP de escritorio (Windows) usado solo para probar el
+# streamer localmente sin gastar cuota de YouTube — no es parte del
+# servicio que corre en el contenedor, no hace falta versionarlo (80MB+).
+mediamtx/
+mediamtx.zip

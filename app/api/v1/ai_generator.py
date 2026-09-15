@@ -15,16 +15,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.v1.playlist import agregar
 from app.config import settings
+from app.core.auth import verificar_admin_token
 from app.schemas.playlist import AddClipRequest
 from app.services.ai_service import generar_guion, generar_voz
 from app.services.media_service import MediaValidationError, armar_clip_narrado
 
-router = APIRouter(prefix="/ai", tags=["ai"])
+router = APIRouter(prefix="/ai", tags=["ai"], dependencies=[Depends(verificar_admin_token)])
 
 
 class GuionRequest(BaseModel):

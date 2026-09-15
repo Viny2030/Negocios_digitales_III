@@ -21,9 +21,10 @@ encontraba y el stream se cortaba ("EN DIRECTO" pero sin datos en YouTube).
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.config import settings
+from app.core.auth import verificar_admin_token
 from app.core.playlist_io import escribir_playlist, leer_playlist
 from app.schemas.playlist import AddClipRequest, ClipItem, PlaylistResponse, ReorderRequest
 from app.services.media_service import MediaValidationError, probar_clip
@@ -51,7 +52,7 @@ def listar() -> PlaylistResponse:
     return PlaylistResponse(items=items)
 
 
-@router.post("", response_model=PlaylistResponse)
+@router.post("", response_model=PlaylistResponse, dependencies=[Depends(verificar_admin_token)])
 def agregar(body: AddClipRequest) -> PlaylistResponse:
     path = settings.media_dir / body.filename
     if not path.exists():
@@ -70,7 +71,7 @@ def agregar(body: AddClipRequest) -> PlaylistResponse:
     return listar()
 
 
-@router.put("/reorder", response_model=PlaylistResponse)
+@router.put("/reorder", response_model=PlaylistResponse, dependencies=[Depends(verificar_admin_token)])
 def reordenar(body: ReorderRequest) -> PlaylistResponse:
     actuales = set(leer_playlist())
     nuevos = set(body.orden)
@@ -85,7 +86,7 @@ def reordenar(body: ReorderRequest) -> PlaylistResponse:
     return listar()
 
 
-@router.delete("/{filename}", response_model=PlaylistResponse)
+@router.delete("/{filename}", response_model=PlaylistResponse, dependencies=[Depends(verificar_admin_token)])
 def eliminar(filename: str) -> PlaylistResponse:
     nombres = leer_playlist()
     if filename not in nombres:

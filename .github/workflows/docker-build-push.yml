@@ -7,10 +7,8 @@
 #
 # Requiere dos secrets en GitHub (Settings → Secrets and variables →
 # Actions):
-#   - DOCKERHUB_USERNAME: tu usuario de Docker Hub.
-#   - DOCKERHUB_TOKEN: un access token de Docker Hub (Account Settings →
-#     Security → New Access Token, permiso Read & Write) — NUNCA tu
-#     contraseña real.
+#   - DOCKERHUB_USERNAME: viny01958091
+#   - DOCKERHUB_TOKEN:dckr_pat_CwslkyNf-vymx8z6oBcBZiaBFv0
 #
 # El nombre de la imagen es "<DOCKERHUB_USERNAME>/negocios-digitales-iii".
 # Si ya usás otro nombre de repositorio en Docker Hub, cambiá `IMAGE_NAME`

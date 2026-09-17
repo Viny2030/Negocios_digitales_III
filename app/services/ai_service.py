@@ -33,6 +33,7 @@ placeholder de silencio que antes.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -146,7 +147,22 @@ def generar_voz(texto: str, nombre_archivo: str, voice_id: str | None = None) ->
         return destino
 
     comando = [settings.piper_bin, "-m", str(modelo), "-f", str(destino)]
-    resultado = subprocess.run(comando, input=texto, capture_output=True, text=True, encoding="utf-8")
+    # FIX 2026-09-17: en Windows, `encoding="utf-8"` acá abajo solo controla
+    # cómo ESTE proceso (el padre) codifica `texto` al escribirlo en el pipe
+    # de stdin de piper — no dice nada de con qué encoding el proceso HIJO
+    # (piper.exe, su propio intérprete de Python) va a *decodificar* esos
+    # bytes al leer sys.stdin. Sin PYTHONUTF8/PYTHONIOENCODING seteados, el
+    # hijo cae al codepage ANSI de Windows (ej. cp1252) para decodificar un
+    # pipe, no al UTF-8 que este proceso usó para codificar — con texto en
+    # español (tildes, "ñ", "¿", "¡") eso produce mojibake antes de que
+    # llegue al fonemizador, y de ahí la voz generada "no lee bien" el
+    # guion (se nota en local/Windows; en Railway no aparece porque la
+    # imagen Docker de Python en Linux ya fuerza C.UTF-8 por PEP 538).
+    # Forzamos acá el mismo encoding en ambos lados del pipe.
+    entorno = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+    resultado = subprocess.run(
+        comando, input=texto, capture_output=True, text=True, encoding="utf-8", env=entorno,
+    )
     if resultado.returncode != 0:
         raise RuntimeError(f"piper no pudo generar la voz para {nombre_archivo}: {resultado.stderr[-800:]}")
     return destino

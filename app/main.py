@@ -43,6 +43,17 @@ logger = logging.getLogger("main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # En producción (automático dentro de Railway) la app NO arranca sin
+    # ADMIN_TOKEN: sin él, cualquiera con la URL pública puede cortar la
+    # emisión o gastar el crédito de IA llamando a /ai/clip en loop.
+    if settings.es_produccion and not settings.admin_token:
+        raise RuntimeError(
+            "APP_ENV=production y ADMIN_TOKEN vacío: la app no arranca. Configurá ADMIN_TOKEN "
+            "en las variables del servicio en Railway (ver README, 'Proteger la API')."
+        )
+    if not settings.admin_token:
+        logger.warning("ADMIN_TOKEN vacío: los endpoints de control quedan abiertos (aceptable solo en local).")
+
     if settings.scheduler_enabled:
         scheduler.start()
     if settings.watchdog_enabled:

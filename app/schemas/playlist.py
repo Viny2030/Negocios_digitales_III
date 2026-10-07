@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from app.core.rutas import NombreArchivo
+
 
 class ClipItem(BaseModel):
     filename: str
@@ -21,9 +23,9 @@ class AddClipRequest(BaseModel):
     # No se maneja upload HTTP acá a propósito: los clips pesan cientos de MB
     # y un upload por API atado al mismo proceso que sostiene el streaming
     # 24/7 es un riesgo de estabilidad que no vale la pena para este alcance.
-    filename: str
+    filename: NombreArchivo
     posicion: int | None = None  # None = al final
 
 
 class ReorderRequest(BaseModel):
-    orden: list[str]  # lista completa de filenames en el nuevo orden deseado
+    orden: list[NombreArchivo]  # lista completa de filenames en el nuevo orden deseado

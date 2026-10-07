@@ -179,12 +179,45 @@ default) y chequea cada `WATCHDOG_CHECK_INTERVAL_SEG` (15s default).
 Tiene un techo de reintentos por ventana de tiempo
 (`WATCHDOG_MAX_REINTENTOS=5` cada `WATCHDOG_VENTANA_SEG=600` por default)
 para no quedar en un loop infinito si `ffmpeg` sigue muriendo (ej.
-`RTMP_STREAM_KEY` inválida) — pasado el techo, deja de insistir y loguea
-`CRITICAL` hasta un `POST /stream/start` manual. Ver estado en
-`GET /api/v1/stream/watchdog` (`agotado: true` = necesita intervención).
+`RTMP_STREAM_KEY` inválida, un corte de red largo, un bloque sin clips) —
+pasado el techo, **pausa** los reintentos y loguea `CRITICAL`; cuando
+vencen los reintentos viejos de la ventana, vuelve a intentar solo (antes
+quedaba agotado para siempre hasta reiniciar el proceso). `POST
+/stream/start` resetea el contador. Además, al cambiar de bloque horario el
+scheduler vuelve a levantar la emisión si estaba caída. Ver estado en
+`GET /api/v1/stream/watchdog` (`agotado: true` = en pausa de reintentos).
 
 No reemplaza `reload()` (cambio de bloque horario del scheduler): eso es
 un reinicio intencional; el watchdog solo actúa ante una caída inesperada.
+
+## Producción, zona horaria y seguridad
+
+- **Modo producción automático en Railway** (`APP_ENV=production`, se
+  detecta por la variable `RAILWAY_ENVIRONMENT_NAME` que inyecta Railway):
+  la app **no arranca sin `ADMIN_TOKEN`**, y `/ai/*` no genera
+  placeholders — sin LLM o sin modelo de voz responde `503` en vez de armar
+  un clip "[SIMULADO]" o mudo que saldría al aire. Si Anthropic falla (sin
+  crédito, sobrecarga), prueba con OpenAI antes de rendirse.
+- **Zona horaria**: la grilla usa `TIMEZONE=America/Argentina/Buenos_Aires`
+  (no la hora del servidor, que en Railway es UTC).
+- **Clave de transmisión oculta**: ffmpeg imprime la URL RTMP completa en
+  sus errores; la app reemplaza la clave por `***CLAVE-OCULTA***` en los
+  logs y en `GET /stream/status` (que es público).
+- **Nombres de archivo validados**: `nombre_archivo`, `filename` y
+  `voice_id` solo aceptan letras, números, `.`, `_` y `-` (sin carpetas ni
+  `..`); `imagen_fondo` tiene que ser un archivo existente dentro de
+  `media/` (no una URL).
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt   # requiere ffmpeg en el PATH
+pytest -q
+ruff check .
+```
+
+Corren solos en GitHub Actions antes de publicar la imagen: si fallan, no
+se sube a Docker Hub.
 
 ## Decisiones técnicas a tener en cuenta
 

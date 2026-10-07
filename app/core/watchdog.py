@@ -15,22 +15,22 @@ transmitiendo (`debe_estar_corriendo()` True pero `status()["running"]`
 False).
 
 Backoff con techo: reintenta enseguida las primeras veces; si ffmpeg sigue
-muriendo en loop (ej. RTMP_STREAM_KEY inválida, o YouTube rechazando la
-conexión) hay un límite de reintentos por ventana de tiempo
+muriendo en loop (ej. RTMP_STREAM_KEY inválida, un corte de red largo, o un
+bloque horario sin clips) hay un límite de reintentos por ventana de tiempo
 (WATCHDOG_MAX_REINTENTOS / WATCHDOG_VENTANA_SEG) para no quedar en un loop
-de reinicios infinito quemando CPU/red — pasado el límite, deja de
-reintentar y loguea CRITICAL hasta un POST /stream/start manual (que
-resetea el contador al arrancar el watchdog de nuevo... en realidad el
-contador se resetea recién en el próximo `start()` del proceso completo;
-ver `estado()`/`WatchdogStatus.agotado` para saber si hace falta intervenir
-a mano).
+de reinicios quemando CPU/red. Pasado el límite, PAUSA los reintentos y
+loguea CRITICAL; cuando los reintentos viejos salen de la ventana, vuelve a
+intentar solo. Antes quedaba "agotado" para siempre (hasta reiniciar todo el
+proceso, ni siquiera POST /stream/start lo reseteaba): un problema
+transitorio dejaba el canal caído aunque después se resolviera solo.
+POST /stream/start sí resetea el contador ahora (ver `resetear()`).
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config import settings
 from app.core.streamer import streamer
@@ -49,7 +49,7 @@ class StreamWatchdog:
         self._agotado = False
 
     def _reintentos_recientes(self) -> int:
-        limite = datetime.now(timezone.utc).timestamp() - settings.watchdog_ventana_seg
+        limite = datetime.now(UTC).timestamp() - settings.watchdog_ventana_seg
         while self._reintentos and self._reintentos[0].timestamp() < limite:
             self._reintentos.popleft()
         return len(self._reintentos)
@@ -59,31 +59,41 @@ class StreamWatchdog:
             try:
                 await asyncio.wait_for(self._detener.wait(), timeout=settings.watchdog_check_interval_seg)
                 break  # nos pidieron parar
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass  # chequeo normal cada watchdog_check_interval_seg
 
-            if not streamer.debe_estar_corriendo() or streamer.status()["running"]:
-                continue  # todo en orden: parado a propósito, o corriendo bien
+            self.chequear()
 
-            if self._agotado:
-                continue  # ya se acabaron los reintentos — no insistir hasta un start() manual
+    def chequear(self) -> None:
+        """Un chequeo del watchdog (separado del loop para poder testearlo)."""
+        if not streamer.debe_estar_corriendo() or streamer.status()["running"]:
+            return  # todo en orden: parado a propósito, o corriendo bien
 
-            if self._reintentos_recientes() >= settings.watchdog_max_reintentos:
+        if self._reintentos_recientes() >= settings.watchdog_max_reintentos:
+            if not self._agotado:
                 self._agotado = True
                 logger.critical(
                     f"Watchdog: ffmpeg se cayó {settings.watchdog_max_reintentos} veces en los "
-                    f"últimos {settings.watchdog_ventana_seg}s — dejo de reintentar. Revisar a mano "
-                    f"(GET /api/v1/stream/status para el último log de ffmpeg) y volver a arrancar "
-                    f"con POST /stream/start cuando esté resuelto."
+                    f"últimos {settings.watchdog_ventana_seg}s — pauso los reintentos hasta que pase "
+                    f"la ventana. Ver GET /api/v1/stream/status para el último log de ffmpeg."
                 )
-                continue
+            return
 
-            logger.warning("Watchdog: el streamer se cayó inesperadamente — reintentando arranque.")
-            self._reintentos.append(datetime.now(timezone.utc))
-            try:
-                streamer.start()
-            except RuntimeError as e:
-                logger.error(f"Watchdog: no se pudo reiniciar el streamer: {e}")
+        if self._agotado:
+            self._agotado = False
+            logger.warning("Watchdog: pasó la ventana de reintentos — vuelvo a intentar levantar el streamer.")
+
+        logger.warning("Watchdog: el streamer no está corriendo y debería — reintentando arranque.")
+        self._reintentos.append(datetime.now(UTC))
+        try:
+            streamer.start()
+        except RuntimeError as e:
+            logger.error(f"Watchdog: no se pudo reiniciar el streamer: {e}")
+
+    def resetear(self) -> None:
+        """Limpia el contador de reintentos (lo llama POST /stream/start)."""
+        self._reintentos.clear()
+        self._agotado = False
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -107,7 +117,7 @@ class StreamWatchdog:
         return {
             "corriendo": self._task is not None and not self._task.done(),
             "reintentos_recientes": self._reintentos_recientes(),
-            "agotado": self._agotado,
+            "agotado": self._reintentos_recientes() >= settings.watchdog_max_reintentos,
         }
 
 

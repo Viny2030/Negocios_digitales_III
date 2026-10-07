@@ -1,0 +1,4 @@
+# Desarrollo/CI (no se instala en la imagen Docker).
+-r requirements.txt
+pytest==8.3.4
+ruff==0.16.8

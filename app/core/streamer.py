@@ -28,14 +28,28 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
-import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config import settings
+from app.core.playlist_io import leer_playlist
 
 logger = logging.getLogger("streamer")
+
+CLAVE_OCULTA = "***CLAVE-OCULTA***"
+
+
+def ocultar_clave(texto: str) -> str:
+    """Reemplaza la clave de transmisión (RTMP_STREAM_KEY) por un marcador.
+    ffmpeg incluye la URL de salida COMPLETA (con la clave) en sus mensajes de
+    error -- ej. "rtmp://a.rtmp.youtube.com/live2/<CLAVE>: Connection refused"
+    -- y esas líneas se devuelven en GET /stream/status, que es público. Con
+    la clave, cualquiera podría transmitir en el canal de YouTube."""
+    clave = settings.rtmp_stream_key
+    if clave and clave in texto:
+        return texto.replace(clave, CLAVE_OCULTA)
+    return texto
 
 
 @dataclass
@@ -71,6 +85,15 @@ class FFmpegStreamer:
         destino = f"{settings.rtmp_url}/{settings.rtmp_stream_key}"
         return [
             settings.ffmpeg_bin,
+            "-hide_banner",
+            # -nostats: ffmpeg imprime el progreso ("frame=... speed=...") con
+            # \r y sin salto de línea; el lector de stderr corta por \n, así que
+            # en una emisión 24/7 todo ese progreso se acumulaba en UNA sola
+            # "línea" en memoria que crecía sin parar (~17 MB por día) y que
+            # nunca llegaba a last_log_lines. Con -loglevel warning quedan solo
+            # avisos y errores, que es lo que sirve para diagnosticar.
+            "-nostats",
+            "-loglevel", "warning",
             "-re",  # respeta el framerate original en vez de leer el archivo lo más rápido posible
             "-stream_loop", "-1",  # repite la playlist entera indefinidamente
             "-f", "concat",
@@ -87,9 +110,10 @@ class FFmpegStreamer:
         ffmpeg se cuelga esperando que alguien lo vacíe."""
         assert proceso.stderr is not None
         for linea in proceso.stderr:
-            texto = linea.decode("utf-8", errors="replace").rstrip()
+            texto = ocultar_clave(linea.decode("utf-8", errors="replace").rstrip())
             if texto:
                 self._estado.log_lines.append(texto)
+                logger.warning(f"ffmpeg: {texto}")
         proceso.wait()
         with self._lock:
             self._estado.return_code = proceso.returncode
@@ -101,13 +125,18 @@ class FFmpegStreamer:
             if self._estado.proceso is not None and self._estado.proceso.poll() is None:
                 raise RuntimeError("El streamer ya está corriendo — llamá a /stop o /reload primero.")
             comando = self._comando_ffmpeg()
-            logger.info(f"Arrancando ffmpeg: {' '.join(comando)}")
+            if not leer_playlist():
+                raise RuntimeError(
+                    f"La playlist ({settings.playlist_path}) está vacía — no hay nada que transmitir. "
+                    "Cargá clips (POST /api/v1/playlist o /ai/clip) o revisá el bloque horario actual."
+                )
+            logger.info(f"Arrancando ffmpeg: {ocultar_clave(' '.join(comando))}")
             proceso = subprocess.Popen(
                 comando,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
             )
-            self._estado = _EstadoStreamer(proceso=proceso, started_at=datetime.now(timezone.utc))
+            self._estado = _EstadoStreamer(proceso=proceso, started_at=datetime.now(UTC))
             self._debe_estar_corriendo = True
             self._reader_thread = threading.Thread(
                 target=self._leer_stderr, args=(proceso,), daemon=True
@@ -147,7 +176,7 @@ class FFmpegStreamer:
             corriendo = proceso is not None and proceso.poll() is None
             uptime = None
             if estado.started_at is not None:
-                uptime = (datetime.now(timezone.utc) - estado.started_at).total_seconds()
+                uptime = (datetime.now(UTC) - estado.started_at).total_seconds()
             return {
                 "running": corriendo,
                 "pid": proceso.pid if corriendo else None,

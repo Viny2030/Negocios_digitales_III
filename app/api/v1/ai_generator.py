@@ -21,8 +21,9 @@ from pydantic import BaseModel
 from app.api.v1.playlist import agregar
 from app.config import settings
 from app.core.auth import verificar_admin_token
+from app.core.rutas import NombreArchivo, resolver_imagen_fondo
 from app.schemas.playlist import AddClipRequest
-from app.services.ai_service import generar_guion, generar_voz
+from app.services.ai_service import ServicioIAError, generar_guion, generar_voz
 from app.services.media_service import MediaValidationError, armar_clip_narrado
 
 router = APIRouter(prefix="/ai", tags=["ai"], dependencies=[Depends(verificar_admin_token)])
@@ -39,8 +40,8 @@ class GuionResponse(BaseModel):
 
 class VozRequest(BaseModel):
     texto: str
-    nombre_archivo: str  # sin extensión — se guarda como <nombre_archivo>.wav
-    voice_id: str | None = None  # nombre de un modelo Piper ya descargado; pisa PIPER_VOICE_DEFAULT del .env para esta llamada puntual
+    nombre_archivo: NombreArchivo  # sin extensión — se guarda como <nombre_archivo>.wav
+    voice_id: NombreArchivo | None = None  # nombre de un modelo Piper ya descargado; pisa PIPER_VOICE_DEFAULT del .env para esta llamada puntual
 
 
 class VozResponse(BaseModel):
@@ -50,9 +51,9 @@ class VozResponse(BaseModel):
 class ClipRequest(BaseModel):
     tema: str
     contexto: str | None = None
-    nombre_archivo: str  # sin extensión — nombre base para el .mp3 y el .mp4 resultantes
-    voice_id: str | None = None  # modelo de voz Piper para este bloque (ver plan de contenido)
-    imagen_fondo: str | None = None  # ruta a una placa/fondo institucional ya subida al servidor
+    nombre_archivo: NombreArchivo  # sin extensión — nombre base para el .wav y el .mp4 resultantes
+    voice_id: NombreArchivo | None = None  # modelo de voz Piper para este bloque (ver plan de contenido)
+    imagen_fondo: str | None = None  # ruta a una placa dentro de media/ (ej. media/placas/umsa_fondo.png)
     color_fondo: str = "black"  # se usa solo si no se pasa imagen_fondo
     agregar_a_playlist: bool = True
 
@@ -66,12 +67,18 @@ class ClipResponse(BaseModel):
 
 @router.post("/guion", response_model=GuionResponse)
 def crear_guion(body: GuionRequest) -> GuionResponse:
-    return GuionResponse(guion=generar_guion(body.tema, body.contexto))
+    try:
+        return GuionResponse(guion=generar_guion(body.tema, body.contexto))
+    except ServicioIAError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
 
 @router.post("/voz", response_model=VozResponse)
 def crear_voz(body: VozRequest) -> VozResponse:
-    ruta = generar_voz(body.texto, body.nombre_archivo, voice_id=body.voice_id)
+    try:
+        ruta = generar_voz(body.texto, body.nombre_archivo, voice_id=body.voice_id)
+    except ServicioIAError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     return VozResponse(ruta_audio=str(ruta))
 
 
@@ -82,15 +89,25 @@ def crear_clip(body: ClipRequest) -> ClipResponse:
     playlist que lee el streamer. Pensado para probar un bloque de la
     grilla de punta a punta (ej. tema="Convocatoria a becas 2027" para el
     bloque "UMSA Despierta") con una sola llamada."""
-    guion = generar_guion(body.tema, body.contexto)
-    ruta_audio = generar_voz(guion, body.nombre_archivo, voice_id=body.voice_id)
+    # Se valida la imagen ANTES de gastar crédito de IA en el guion.
+    imagen: Path | None = None
+    if body.imagen_fondo:
+        try:
+            imagen = resolver_imagen_fondo(body.imagen_fondo)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    try:
+        guion = generar_guion(body.tema, body.contexto)
+        ruta_audio = generar_voz(guion, body.nombre_archivo, voice_id=body.voice_id)
+    except ServicioIAError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
     ruta_video = settings.media_dir / f"{body.nombre_archivo}.mp4"
-    imagen = Path(body.imagen_fondo) if body.imagen_fondo else None
     try:
         armar_clip_narrado(ruta_audio, ruta_video, imagen_fondo=imagen, color_fondo=body.color_fondo)
     except MediaValidationError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
     en_playlist = False
     if body.agregar_a_playlist:

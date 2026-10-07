@@ -7,3 +7,6 @@ openai==1.59.6
 anthropic==1.4.0
 python-dotenv==1.0.1
 piper-tts==1.4.2
+# Base de zonas horarias para zoneinfo (la grilla usa America/Argentina/Buenos_Aires):
+# las imágenes Docker slim no siempre traen la del sistema.
+tzdata==2025.2

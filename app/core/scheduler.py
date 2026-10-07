@@ -39,6 +39,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from app.config import settings
 from app.core.playlist_io import escribir_playlist
@@ -58,7 +59,7 @@ INTERVALO_CHEQUEO_SEG = 60
 @dataclass(frozen=True)
 class Bloque:
     nombre: str
-    hora_inicio: int  # hora local, 0-23, inclusive
+    hora_inicio: int  # hora en settings.timezone (Argentina por default), 0-23, inclusive
     hora_fin: int  # exclusivo; si hora_fin <= hora_inicio, el bloque cruza medianoche
     prefijo: str  # prefijo de nombre_archivo que agrupa los clips de este bloque
 
@@ -83,8 +84,10 @@ GRILLA: list[Bloque] = [
 
 def bloque_actual(hora: int | None = None) -> Bloque:
     """Devuelve el bloque de la grilla activo a la hora dada (0-23). Si no se
-    pasa `hora`, usa la hora local actual del sistema."""
-    hora = datetime.now().hour if hora is None else hora
+    pasa `hora`, usa la hora actual en `settings.timezone` (Argentina) -- NO
+    la del servidor: en Railway el contenedor corre en UTC y la grilla
+    quedaba corrida 3 horas (UMSA Despierta salía de 4 a 7)."""
+    hora = datetime.now(ZoneInfo(settings.timezone)).hour if hora is None else hora
     for bloque in GRILLA:
         if bloque.activo_a_las(hora):
             return bloque
@@ -143,7 +146,7 @@ class SchedulerBloques:
                 self._aplicar(bloque)
             try:
                 await asyncio.wait_for(self._detener.wait(), timeout=INTERVALO_CHEQUEO_SEG)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass  # es el chequeo normal cada INTERVALO_CHEQUEO_SEG, no un error
 
     def _aplicar(self, bloque: Bloque) -> str:
@@ -162,6 +165,16 @@ class SchedulerBloques:
             except RuntimeError as e:
                 logger.error(f"No se pudo recargar el streamer al cambiar de bloque: {e}")
                 detail += f" No se pudo recargar el streamer: {e}"
+        elif streamer.debe_estar_corriendo():
+            # Se supone que estamos al aire pero ffmpeg está caído (ej. el
+            # bloque anterior no tenía clips): el bloque nuevo puede traer
+            # contenido, así que se intenta levantar la emisión de nuevo.
+            try:
+                streamer.start()
+                detail += " Streamer arrancado (estaba caído)."
+            except RuntimeError as e:
+                logger.error(f"No se pudo arrancar el streamer al cambiar de bloque: {e}")
+                detail += f" No se pudo arrancar el streamer: {e}"
         return detail
 
     def forzar(self, hora: int | None = None) -> str:

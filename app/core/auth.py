@@ -13,13 +13,19 @@ configurar ADMIN_TOKEN es en la práctica OBLIGATORIO (ver README).
 """
 from __future__ import annotations
 
+import secrets
+
 from fastapi import Header, HTTPException
 
 from app.config import settings
 
 
 async def verificar_admin_token(x_admin_token: str | None = Header(default=None)) -> None:
-    if settings.admin_token and x_admin_token != settings.admin_token:
+    if not settings.admin_token:
+        return
+    # compare_digest: comparación en tiempo constante (un `!=` común deja
+    # inferir el token carácter por carácter midiendo tiempos de respuesta).
+    if x_admin_token is None or not secrets.compare_digest(x_admin_token, settings.admin_token):
         raise HTTPException(
             status_code=401,
             detail="Token de administrador inválido o faltante — mandá el header 'X-Admin-Token'.",

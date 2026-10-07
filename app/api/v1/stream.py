@@ -23,7 +23,8 @@ def start() -> ActionResult:
     try:
         streamer.start()
     except RuntimeError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    watchdog.resetear()  # arranque manual = empezar de cero con los reintentos automáticos
     return ActionResult(ok=True, detail="Streamer arrancado")
 
 
@@ -40,7 +41,7 @@ def reload() -> ActionResult:
     try:
         streamer.reload()
     except RuntimeError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     return ActionResult(ok=True, detail="Streamer reiniciado — playlist releída")
 
 
@@ -77,5 +78,5 @@ def watchdog_status() -> WatchdogStatus:
     inesperadamente (ver core/watchdog.py) — `agotado=true` significa que
     ya usó todos sus reintentos en la ventana de tiempo configurada y dejó
     de insistir; requiere un POST /stream/start manual para resetear el
-    contador."""
+    contador (o esperar a que pase la ventana: retoma solo)."""
     return WatchdogStatus(**watchdog.estado())

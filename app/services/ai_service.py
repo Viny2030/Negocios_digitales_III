@@ -41,6 +41,12 @@ from app.config import settings
 
 logger = logging.getLogger("ai_service")
 
+
+class ServicioIAError(RuntimeError):
+    """No se pudo generar el guion o la voz (proveedores caídos, sin crédito,
+    o sin configurar en producción). Los endpoints la traducen a un 503 con
+    un mensaje claro en vez de un 500 sin controlar."""
+
 PROMPT_SISTEMA = (
     "Sos el redactor institucional del canal de streaming 24/7 de la UMSA "
     "(Universidad del Museo Social Argentino). Escribís guiones breves, en "
@@ -66,11 +72,30 @@ def generar_guion(tema: str, contexto: str | None = None) -> str:
     a una de las dos cuentas se le acaba el crédito (ver docstring del
     módulo).
     """
+    proveedores = []
     if settings.anthropic_api_key:
-        return _generar_guion_anthropic(tema, contexto)
+        proveedores.append(("Anthropic", _generar_guion_anthropic))
     if settings.openai_api_key:
-        return _generar_guion_openai(tema, contexto)
+        proveedores.append(("OpenAI", _generar_guion_openai))
 
+    errores = []
+    for nombre, generar in proveedores:
+        try:
+            guion = generar(tema, contexto).strip()
+        except Exception as e:  # noqa: BLE001 — sin crédito, sobrecarga, red, modelo inválido...
+            logger.warning(f"{nombre} falló generando el guion ({type(e).__name__}: {e}) — pruebo el siguiente")
+            errores.append(f"{nombre}: {type(e).__name__}: {e}")
+            continue
+        if guion:
+            return guion
+        errores.append(f"{nombre}: respuesta vacía")
+
+    if errores:
+        raise ServicioIAError("No se pudo generar el guion con ningún proveedor — " + " | ".join(errores))
+
+    if settings.es_produccion:
+        # Un guion "[SIMULADO]" se sintetizaría a voz y saldría AL AIRE.
+        raise ServicioIAError("Ni ANTHROPIC_API_KEY ni OPENAI_API_KEY están configuradas en producción.")
     logger.warning("Ni ANTHROPIC_API_KEY ni OPENAI_API_KEY están seteadas — devolviendo guion simulado")
     return f"[SIMULADO] Guion sobre «{tema}» — configurá ANTHROPIC_API_KEY (o OPENAI_API_KEY) para generar el real."
 
@@ -133,6 +158,12 @@ def generar_voz(texto: str, nombre_archivo: str, voice_id: str | None = None) ->
     modelo = settings.tts_models_dir / f"{voz}.onnx"
 
     if not modelo.exists():
+        if settings.es_produccion:
+            # Un wav de silencio armaría un clip mudo que saldría AL AIRE.
+            raise ServicioIAError(
+                f"Modelo de voz Piper '{voz}' no encontrado en {settings.tts_models_dir} "
+                "(¿TTS_MODELS_DIR=/srv/tts_models en Railway?)."
+            )
         logger.warning(
             f"Modelo Piper '{voz}' no encontrado en {settings.tts_models_dir} "
             f"(esperaba {modelo.name} + {modelo.name}.json) — generando un wav "
@@ -160,9 +191,12 @@ def generar_voz(texto: str, nombre_archivo: str, voice_id: str | None = None) ->
     # imagen Docker de Python en Linux ya fuerza C.UTF-8 por PEP 538).
     # Forzamos acá el mismo encoding en ambos lados del pipe.
     entorno = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
-    resultado = subprocess.run(
-        comando, input=texto, capture_output=True, text=True, encoding="utf-8", env=entorno,
-    )
+    try:
+        resultado = subprocess.run(
+            comando, input=texto, capture_output=True, text=True, encoding="utf-8", env=entorno,
+        )
+    except FileNotFoundError as e:
+        raise ServicioIAError(f"No se encontró el ejecutable de Piper ({settings.piper_bin}): {e}") from e
     if resultado.returncode != 0:
-        raise RuntimeError(f"piper no pudo generar la voz para {nombre_archivo}: {resultado.stderr[-800:]}")
+        raise ServicioIAError(f"piper no pudo generar la voz para {nombre_archivo}: {resultado.stderr[-800:]}")
     return destino

@@ -9,13 +9,31 @@ avisa explícitamente en vez de fallar en silencio — ver services/ai_service.p
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
+from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # --- Entorno ---
+    # "development" (local) o "production" (deploy público). Si no se define,
+    # se detecta solo: dentro de Railway (variable RAILWAY_ENVIRONMENT_NAME,
+    # que Railway inyecta siempre) es "production". En producción:
+    #   - la app NO arranca sin ADMIN_TOKEN (la URL de Railway es pública);
+    #   - no hay placeholders: sin LLM o sin modelo de voz, /ai/* falla con un
+    #     error claro en vez de generar un clip "[SIMULADO]" o de silencio que
+    #     terminaría saliendo AL AIRE en el canal.
+    app_env: Literal["development", "production"] | None = None
+
+    # Zona horaria de la grilla de programación (ver core/scheduler.py). Los
+    # bloques están pensados en hora argentina; sin esto el scheduler usaba la
+    # hora del servidor, que en Railway es UTC (todo corrido 3 horas).
+    timezone: str = "America/Argentina/Buenos_Aires"
 
     # --- Emisión RTMP ---
     rtmp_url: str = "rtmp://a.rtmp.youtube.com/live2"
@@ -30,6 +48,10 @@ class Settings(BaseSettings):
     autostart: bool = False
 
     # --- Playlist / medios ---
+    # Raíz de medios: `imagen_fondo` (POST /ai/clip) solo puede apuntar a un
+    # archivo dentro de esta carpeta (ej. media/placas/...), nunca a una ruta
+    # cualquiera del servidor ni a una URL.
+    media_root: Path = Path("media")
     media_dir: Path = Path("media/videos")
     playlist_path: Path = Path("media/playlist.txt")
 
@@ -72,7 +94,7 @@ class Settings(BaseSettings):
     # seteada; si no, cae a OpenAI; si tampoco hay OpenAI, devuelve un guion
     # [SIMULADO] (ver services/ai_service.py).
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-5"
+    anthropic_model: str = "claude-sonnet-5-5"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
 
@@ -88,6 +110,17 @@ class Settings(BaseSettings):
     audio_dir: Path = Path("media/audio")
 
     log_level: str = "INFO"
+
+    @model_validator(mode="after")
+    def _resolver_entorno(self):
+        if self.app_env is None:
+            en_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT_NAME") or os.environ.get("RAILWAY_ENVIRONMENT"))
+            self.app_env = "production" if en_railway else "development"
+        return self
+
+    @property
+    def es_produccion(self) -> bool:
+        return self.app_env == "production"
 
 
 settings = Settings()

@@ -21,3 +21,7 @@ media/tts/*
 # servicio que corre en el contenedor, no hace falta versionarlo (80MB+).
 mediamtx/
 mediamtx.zip
+
+# Cachés de herramientas de desarrollo
+.pytest_cache/
+.ruff_cache/

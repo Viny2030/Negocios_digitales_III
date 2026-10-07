@@ -1,0 +1,12 @@
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # líneas largas: muchos comentarios en español a propósito
+    "B008",  # Depends()/Header() como default: patrón idiomático de FastAPI
+]
+
+[lint.isort]
+known-first-party = ["app"]

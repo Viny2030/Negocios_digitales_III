@@ -109,6 +109,12 @@ class Settings(BaseSettings):
     piper_voice_default: str = "es_AR-daniela-high"
     audio_dir: Path = Path("media/audio")
 
+    # --- Página pública (/ y /en, ver app/web.py) ---
+    # ID del canal de YouTube cuyo vivo se muestra en la página (empieza con
+    # "UC", 24 caracteres; YouTube Studio → Configuración → Canal → Configuración
+    # avanzada). Vacío = la página muestra un aviso en lugar del reproductor.
+    youtube_channel_id: str = ""
+
     log_level: str = "INFO"
 
     @model_validator(mode="after")

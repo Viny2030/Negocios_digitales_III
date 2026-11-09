@@ -5,6 +5,23 @@ Servicio FastAPI que controla la emisión 24/7 en YouTube Live (vía FFmpeg
 voz) con IA — scaffold inicial a partir del documento de arquitectura del
 proyecto.
 
+## Página pública: video en vivo, manual y grafos
+
+`/` (español) y `/en` (inglés) muestran el reproductor del canal en vivo, el
+estado de la emisión, el manual y dos grafos: **funcionamiento** (fuentes →
+procesos → datos guardados → lo que publica) e **información** (qué emite cada
+bloque de la grilla). Todos los nodos llevan su nombre en los dos idiomas.
+
+- El reproductor usa `YOUTUBE_CHANNEL_ID` (ID del canal, empieza con `UC`; ver
+  `.env.example`). Sin esa variable la página muestra un aviso en su lugar.
+- Los HTML (`app/static/sitio_es.html` y `sitio_en.html`) se generan con
+  `python scripts/generar_sitio.py`: no editarlos a mano. Si cambiás textos,
+  grafos o la grilla, volvé a correrlo y commiteá los dos archivos
+  (`tests/test_sitio.py` falla si quedaron desactualizados o si la grilla de
+  `core/scheduler.py` y la del grafo no coinciden).
+- El JSON que antes devolvía `/` ahora está en `/api/v1/info`. `/` sigue
+  respondiendo 200, así que el healthcheck no cambia.
+
 ## Instalación y uso local
 
 ```bash

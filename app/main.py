@@ -31,6 +31,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app import web
 from app.api.v1.router import router as router_v1
 from app.config import settings
 from app.core.scheduler import scheduler
@@ -77,8 +78,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(router_v1, prefix="/api/v1")
+# Página pública (video en vivo, manual y grafos en / y /en). Antes "/"
+# devolvía un JSON; ese dato ahora está en /api/v1/info. "/" sigue
+# respondiendo 200, así que el healthcheck de railway.toml no cambia.
+app.include_router(web.router)
 
 
-@app.get("/")
-def raiz() -> dict:
-    return {"servicio": "umsa-stream-engine", "docs": "/docs"}
+@app.get("/api/v1/info")
+def info() -> dict:
+    return {"servicio": "umsa-stream-engine", "docs": "/docs", "sitio": {"es": "/", "en": "/en"}}

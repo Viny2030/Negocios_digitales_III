@@ -130,9 +130,28 @@ Si el streamer ya está corriendo, después de agregar un clip hace falta
 `POST /api/v1/stream/reload` para que lo tome (corta la señal un par de
 segundos, ver limitación documentada en `core/streamer.py`).
 
-**Todavía pendiente** (no cubierto por `/clip`): subtítulos automáticos y
-placas dinámicas con datos en tiempo real (fecha, clima, agenda en
-pantalla) — hoy el fondo es estático (imagen fija o color).
+### Subtítulos en español e inglés
+
+`/ai/clip` genera además dos `.srt` por clip (campo `subtitulos`, default
+`["es", "en"]`; `[]` = sin subtítulos), en `SUBTITULOS_DIR` (default
+`media/videos/subtitulos`, dentro del Volume en Railway):
+
+- La voz se sintetiza **oración por oración** con Piper, así que los tiempos
+  de cada subtítulo son exactos, no estimados.
+- El inglés lo traduce el mismo LLM del guion (Anthropic → OpenAI), una
+  traducción por oración: hereda los tiempos de la oración en español. Si el
+  modelo devuelve otra cantidad de oraciones, se prueba el otro proveedor y,
+  si tampoco, responde 503 (mejor eso que subtítulos desincronizados).
+- Cuesta una llamada extra al LLM por clip. Máximo 2 líneas de 42
+  caracteres por subtítulo.
+
+Cómo llegan esos subtítulos a YouTube (pista CC en inglés) está pendiente:
+requiere el evento en **latencia normal** y YouTube admite **una sola pista**
+de subtítulos por transmisión.
+
+**Todavía pendiente** (no cubierto por `/clip`): placas dinámicas con datos
+en tiempo real (fecha, clima, agenda en pantalla) — hoy el fondo es estático
+(imagen fija o color).
 
 ## Deploy en Railway
 

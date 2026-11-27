@@ -55,6 +55,10 @@ FALLBACK_PREFIX = "prueba_fondo_umsa"
 # cambian en horas en punto, así que no hace falta más precisión que esta.
 INTERVALO_CHEQUEO_SEG = 60
 
+# Lo que el scheduler acepta como clip. Todo pasa por el perfil fijo de
+# media_service (1080p30 H.264/AAC), que /ai/clip y normalizar_clip escriben en .mp4.
+EXTENSIONES_VIDEO = {".mp4", ".m4v", ".mov", ".mkv"}
+
 
 @dataclass(frozen=True)
 class Bloque:
@@ -96,23 +100,27 @@ def bloque_actual(hora: int | None = None) -> Bloque:
     raise RuntimeError(f"Ningún bloque de la grilla cubre la hora {hora} — revisar GRILLA en scheduler.py")
 
 
+def _videos_con_prefijo(prefijo: str) -> list[str]:
+    """Solo archivos de video: un .srt, un .tmp o cualquier otro archivo con el
+    mismo prefijo que quede en media_dir no puede terminar en la playlist (ffmpeg
+    cortaría la emisión al llegarle el turno)."""
+    return sorted(
+        p.name for p in settings.media_dir.iterdir()
+        if p.is_file() and p.name.startswith(prefijo) and p.suffix.lower() in EXTENSIONES_VIDEO
+    )
+
+
 def _clips_para(bloque: Bloque) -> list[str]:
-    """Devuelve los nombres de archivo de `media_dir` que empiezan con el
-    prefijo del bloque, ordenados alfabéticamente (orden estable entre
-    reloads). Si no hay ninguno, cae al fallback institucional."""
+    """Devuelve los videos de `media_dir` que empiezan con el prefijo del
+    bloque, ordenados alfabéticamente (orden estable entre reloads). Si no hay
+    ninguno, cae al fallback institucional."""
     if not settings.media_dir.exists():
         return []
-    candidatos = sorted(
-        p.name for p in settings.media_dir.iterdir()
-        if p.is_file() and p.name.startswith(bloque.prefijo)
-    )
+    candidatos = _videos_con_prefijo(bloque.prefijo)
     if candidatos:
         return candidatos
 
-    fallback = sorted(
-        p.name for p in settings.media_dir.iterdir()
-        if p.is_file() and p.name.startswith(FALLBACK_PREFIX)
-    )
+    fallback = _videos_con_prefijo(FALLBACK_PREFIX)
     if fallback:
         logger.warning(
             f"Bloque «{bloque.nombre}» no tiene clips propios (prefijo "

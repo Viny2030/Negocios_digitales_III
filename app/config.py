@@ -99,15 +99,20 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
 
     # --- TTS (voz) — Piper: motor neuronal local (pip install piper-tts),
-    # sin costo ni cuota. generar_voz() en services/ai_service.py busca el
-    # modelo <voice_id o piper_voice_default>.onnx (+ su .onnx.json) dentro
-    # de tts_models_dir; si no lo encuentra, cae a un wav de silencio (mismo
-    # comportamiento de placeholder que antes con ElevenLabs cuando faltaba
-    # la API key, para no bloquear el resto del pipeline).
-    piper_bin: str = "piper"
+    # sin costo ni cuota. sintetizar_oraciones() en services/ai_service.py
+    # carga el modelo <voice_id o piper_voice_default>.onnx (+ su .onnx.json)
+    # de tts_models_dir con la API de Python de Piper (en el mismo proceso, ya
+    # no como subproceso); si no lo encuentra, en desarrollo cae a un wav de
+    # silencio y en producción falla con un error claro.
     tts_models_dir: Path = Path("media/tts")
     piper_voice_default: str = "es_AR-daniela-high"
     audio_dir: Path = Path("media/audio")
+
+    # --- Subtítulos (ver services/subtitulos.py) ---
+    # Dónde se guardan los .srt (español e inglés) de cada clip. Vacío = una
+    # subcarpeta de media_dir, para que en Railway queden dentro del Volume
+    # (persisten entre deploys junto a los clips).
+    subtitulos_dir: Path | None = None
 
     # --- Página pública (/ y /en, ver app/web.py) ---
     # ID del canal de YouTube cuyo vivo se muestra en la página (empieza con
@@ -122,6 +127,8 @@ class Settings(BaseSettings):
         if self.app_env is None:
             en_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT_NAME") or os.environ.get("RAILWAY_ENVIRONMENT"))
             self.app_env = "production" if en_railway else "development"
+        if self.subtitulos_dir is None:
+            self.subtitulos_dir = self.media_dir / "subtitulos"
         return self
 
     @property
@@ -133,4 +140,5 @@ settings = Settings()
 settings.media_dir.mkdir(parents=True, exist_ok=True)
 settings.audio_dir.mkdir(parents=True, exist_ok=True)
 settings.tts_models_dir.mkdir(parents=True, exist_ok=True)
+settings.subtitulos_dir.mkdir(parents=True, exist_ok=True)
 settings.playlist_path.parent.mkdir(parents=True, exist_ok=True)

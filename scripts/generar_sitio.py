@@ -241,6 +241,7 @@ TEXTOS = {
         "estado_detenida": "Detenida",
         "estado_error": "No se pudo consultar el estado.",
         "bloque_actual": "Bloque según la hora",
+        "subs_vacio": "Acá aparecen los subtítulos de lo que se está emitiendo.",
         "manual": """
 <h2 id="manual">Manual</h2>
 <h3>Qué es</h3>
@@ -250,6 +251,7 @@ Toma clips de video ya preparados y los emite en loop con ffmpeg. La programaci�
 
 <h3>Cómo ver la transmisión</h3>
 <p>Arriba está el reproductor del canal en vivo. Al lado se ve si el servicio está emitiendo y qué bloque corresponde a la hora actual. Si el reproductor dice que no hay transmisión, el canal todavía no se configuró en esta página (variable <code>YOUTUBE_CHANNEL_ID</code>) o la emisión está detenida.</p>
+<p>Debajo del reproductor aparecen los subtítulos de lo que se está emitiendo (en inglés en la <a href="/en">versión en inglés</a> de esta página). Se calculan en el servidor a partir del guion de cada clip, así que pueden adelantarse o atrasarse unos segundos respecto del video de YouTube. Los videos propios, cargados sin pasar por la IA, no tienen subtítulos.</p>
 
 <h3>Grilla de programación</h3>
 <table><thead><tr><th>Franja (hora argentina)</th><th>Bloque</th><th>Archivos que emite</th></tr></thead><tbody>__GRILLA__</tbody></table>
@@ -308,6 +310,7 @@ Toma clips de video ya preparados y los emite en loop con ffmpeg. La programaci�
         "estado_detenida": "Stopped",
         "estado_error": "Could not check the status.",
         "bloque_actual": "Block for the current time",
+        "subs_vacio": "English subtitles of what is on air appear here.",
         "manual": """
 <h2 id="manual">Manual</h2>
 <h3>What it is</h3>
@@ -317,6 +320,7 @@ It takes prepared video clips and streams them in a loop with ffmpeg. Programmin
 
 <h3>How to watch</h3>
 <p>The live channel player is at the top. Next to it you can see whether the service is streaming and which block matches the current time. If the player says there is no stream, the channel has not been set for this page yet (<code>YOUTUBE_CHANNEL_ID</code> variable) or streaming is stopped.</p>
+<p>Below the player you can read English subtitles of what is on air. The stream itself is narrated in Spanish; the subtitles are translated from the script of each clip and computed on the server, so they may run a few seconds ahead of or behind the YouTube video. Videos uploaded without going through the AI pipeline have no subtitles.</p>
 
 <h3>Programming schedule</h3>
 <table><thead><tr><th>Time slot (Argentina time)</th><th>Block</th><th>Files it streams</th></tr></thead><tbody>__GRILLA__</tbody></table>
@@ -391,13 +395,16 @@ code { font-size:.9em; background:var(--tarjeta); border:1px solid var(--borde);
 .marco { position:relative; aspect-ratio:16/9; background:#000; border-radius:8px; overflow:hidden; }
 .marco iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
 .aviso { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; text-align:center; color:#ddd; }
+.subtitulo { min-height:3.4em; margin:8px 0 0; padding:8px 12px; background:var(--tarjeta); border:1px solid var(--borde);
+  border-radius:8px; text-align:center; white-space:pre-line; font-size:1.05rem; }
+.subtitulo.vacio { color:var(--suave); font-size:.92rem; }
 .estado { background:var(--tarjeta); border:1px solid var(--borde); border-radius:8px; padding:14px 16px; }
 .estado h2 { margin:0 0 8px; font-size:1.05rem; }
 .estado p { margin:6px 0; }
 .punto { display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--suave); margin-right:6px; }
 .punto.on { background:#2e9b55; } .punto.off { background:#c2453b; }
 table { border-collapse:collapse; width:100%; background:var(--tarjeta); }
-th, td { border:1px solid var(--borde); padding:6px 10px; text-align:left; vertical-align:top; }
+th, td { border:1px solid var(--borde); padding:6px 10px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
 .grafo { overflow-x:auto; background:var(--tarjeta); border:1px solid var(--borde); border-radius:8px; padding:8px; }
 .grafo svg { display:block; width:100%; min-width:640px; height:auto; margin:0 auto; }
 .nodo rect { stroke-width:1.5; }
@@ -435,6 +442,30 @@ JS = """
   }
   actualizar();
   setInterval(actualizar, 30000);
+
+  // Subtítulos: el servidor manda los de los próximos ~20 s con tiempos
+  // relativos a su respuesta; acá se pintan con el reloj local y se vuelven
+  // a pedir cada 10 s (ver core/al_aire.py).
+  var sub = document.getElementById("subtitulo");
+  var cues = [];
+  function pedirSubs() {
+    fetch("/api/v1/stream/subtitulos?idioma=" + T.idioma).then(function (r) { return r.json(); }).then(function (s) {
+      var base = Date.now() / 1000;
+      cues = (s.cues || []).map(function (c) { return { a: base + c.desde, b: base + c.hasta, t: c.texto }; });
+    }).catch(function () { cues = []; });
+  }
+  function pintarSubs() {
+    var ahora = Date.now() / 1000, texto = "";
+    for (var i = 0; i < cues.length; i++) {
+      if (cues[i].a <= ahora && ahora < cues[i].b) { texto = cues[i].t; break; }
+    }
+    if (texto) { sub.textContent = texto; sub.className = "subtitulo"; }
+    else if (!cues.length) { sub.textContent = T.subs_vacio; sub.className = "subtitulo vacio"; }
+    else { sub.textContent = ""; sub.className = "subtitulo"; }  // pausa entre oraciones: sin parpadeo del aviso
+  }
+  pedirSubs();
+  setInterval(pedirSubs, 10000);
+  setInterval(pintarSubs, 250);
 })();
 """
 
@@ -453,6 +484,8 @@ def render(lang: str) -> str:
             "al_aire": t["estado_al_aire"],
             "detenida": t["estado_detenida"],
             "error": t["estado_error"],
+            "idioma": lang,
+            "subs_vacio": t["subs_vacio"],
             "bloques": {n: (n if lang == "es" else BLOQUE_EN[n]) for n in BLOQUE_EN},
         },
         ensure_ascii=False,
@@ -476,7 +509,10 @@ def render(lang: str) -> str:
 </header>
 <main>
 <section id="video" class="vivo">
+<div>
 <div class="marco">__VIDEO__</div>
+<p id="subtitulo" class="subtitulo vacio" lang="{lang}">{escape(t["subs_vacio"])}</p>
+</div>
 <aside class="estado" aria-live="polite">
 <h2>{escape(t["estado_titulo"])}</h2>
 <p id="estado-emision">{escape(t["estado_cargando"])}</p>

@@ -32,6 +32,19 @@ class ScheduleStatus(BaseModel):
     bloque_calculado_ahora: str
 
 
+class Subtitulo(BaseModel):
+    desde: float  # segundos relativos al momento de la respuesta (puede ser negativo: ya empezó)
+    hasta: float
+    texto: str
+
+
+class SubtitulosAlAire(BaseModel):
+    """Subtítulos de lo que se emite en los próximos segundos — ver core/al_aire.py."""
+    al_aire: bool
+    clip: str | None = None
+    cues: list[Subtitulo] = []
+
+
 class WatchdogStatus(BaseModel):
     """Estado del watchdog que reinicia el streamer si se cae solo — ver core/watchdog.py."""
     corriendo: bool

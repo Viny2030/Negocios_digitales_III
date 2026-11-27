@@ -113,6 +113,12 @@ class Settings(BaseSettings):
     # subcarpeta de media_dir, para que en Railway queden dentro del Volume
     # (persisten entre deploys junto a los clips).
     subtitulos_dir: Path | None = None
+    # El sitio (/ y /en) muestra debajo del reproductor el subtítulo de lo que
+    # se está emitiendo, calculado en el servidor (ver core/al_aire.py). Pero
+    # quien mira el embed de YouTube ve la señal con demora (latencia normal:
+    # ~15-60 s), así que el subtítulo se atrasa esta cantidad de segundos para
+    # coincidir con el video. Calibrar una vez con la transmisión real.
+    subtitulos_demora_seg: float = 20.0
 
     # --- Página pública (/ y /en, ver app/web.py) ---
     # ID del canal de YouTube cuyo vivo se muestra en la página (empieza con

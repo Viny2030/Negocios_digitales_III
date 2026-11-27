@@ -58,6 +58,10 @@ class _EstadoStreamer:
     started_at: datetime | None = None
     return_code: int | None = None
     log_lines: deque[str] = field(default_factory=lambda: deque(maxlen=200))
+    # La playlist tal como la leyó ffmpeg al arrancar (concat la lee una sola
+    # vez): con esto y started_at se calcula qué se está emitiendo ahora (ver
+    # core/al_aire.py), aunque playlist.txt cambie después en disco.
+    playlist: list[str] = field(default_factory=list)
 
 
 class FFmpegStreamer:
@@ -131,7 +135,8 @@ class FFmpegStreamer:
             if self._estado.proceso is not None and self._estado.proceso.poll() is None:
                 raise RuntimeError("El streamer ya está corriendo — llamá a /stop o /reload primero.")
             comando = self._comando_ffmpeg()
-            if not leer_playlist():
+            playlist = leer_playlist()
+            if not playlist:
                 raise RuntimeError(
                     f"La playlist ({settings.playlist_path}) está vacía — no hay nada que transmitir. "
                     "Cargá clips (POST /api/v1/playlist o /ai/clip) o revisá el bloque horario actual."
@@ -142,7 +147,7 @@ class FFmpegStreamer:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
             )
-            self._estado = _EstadoStreamer(proceso=proceso, started_at=datetime.now(UTC))
+            self._estado = _EstadoStreamer(proceso=proceso, started_at=datetime.now(UTC), playlist=playlist)
             self._debe_estar_corriendo = True
             self._reader_thread = threading.Thread(
                 target=self._leer_stderr, args=(proceso,), daemon=True
@@ -169,6 +174,15 @@ class FFmpegStreamer:
         ffmpeg caído solo (hay que reiniciarlo) de uno parado a propósito."""
         with self._lock:
             return self._debe_estar_corriendo
+
+    def emision_actual(self) -> tuple[list[str], datetime] | None:
+        """(playlist que está emitiendo ffmpeg, cuándo arrancó), o None si no
+        está corriendo. Lo usa core/al_aire.py para los subtítulos del sitio."""
+        with self._lock:
+            proceso, estado = self._estado.proceso, self._estado
+            if proceso is None or proceso.poll() is not None or estado.started_at is None:
+                return None
+            return list(estado.playlist), estado.started_at
 
     def reload(self) -> None:
         """Reinicia el proceso para que relea la playlist. Ver limitación en

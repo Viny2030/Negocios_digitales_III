@@ -2,13 +2,16 @@
 selector automático de bloque horario (ver core/scheduler.py)."""
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.al_aire import subtitulos_al_aire
 from app.core.auth import verificar_admin_token
 from app.core.scheduler import bloque_actual, scheduler
 from app.core.streamer import streamer
 from app.core.watchdog import watchdog
-from app.schemas.stream import ActionResult, ScheduleStatus, StatusResponse, WatchdogStatus
+from app.schemas.stream import ActionResult, ScheduleStatus, StatusResponse, SubtitulosAlAire, WatchdogStatus
 
 router = APIRouter(prefix="/stream", tags=["stream"])
 
@@ -70,6 +73,15 @@ def schedule_force(hora: int | None = None) -> ActionResult:
         raise HTTPException(status_code=400, detail="hora tiene que estar entre 0 y 23")
     detail = scheduler.forzar(hora)
     return ActionResult(ok=True, detail=detail)
+
+
+@router.get("/subtitulos", response_model=SubtitulosAlAire)
+def subtitulos(idioma: Literal["es", "en"] = "en") -> SubtitulosAlAire:
+    """Subtítulos de lo que se está emitiendo, para los próximos ~20 s, con
+    tiempos relativos al momento de la respuesta (ya atrasados según
+    SUBTITULOS_DEMORA_SEG para coincidir con el video de YouTube). Público y
+    barato: lo consulta la página cada ~10 s. Ver core/al_aire.py."""
+    return SubtitulosAlAire(**subtitulos_al_aire(idioma))
 
 
 @router.get("/watchdog", response_model=WatchdogStatus)

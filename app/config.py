@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # a mano desde POST /api/v1/stream/start.
     autostart: bool = False
 
+    # Bitrate de video (CBR) con el que se generan los clips 1080p30 (ver
+    # services/media_service.py). YouTube recomienda ~4-10 Mbps; por debajo
+    # avisa "tasa de bits inferior a la recomendada". OJO costo: la emisión
+    # 24/7 sube esto sin parar (5000 kbps ≈ 54 GB/día ≈ 1,6 TB/mes de salida).
+    video_bitrate_kbps: int = 5000
+
     # --- Playlist / medios ---
     # Raíz de medios: `imagen_fondo` (POST /ai/clip) solo puede apuntar a un
     # archivo dentro de esta carpeta (ej. media/placas/...), nunca a una ruta
@@ -119,6 +125,12 @@ class Settings(BaseSettings):
     # ~15-60 s), así que el subtítulo se atrasa esta cantidad de segundos para
     # coincidir con el video. Calibrar una vez con la transmisión real.
     subtitulos_demora_seg: float = 20.0
+    # Subtítulos (pista CC) DENTRO de YouTube: URL de ingesta del evento
+    # (YouTube Studio → evento con latencia "Normal" → Subtítulos → "Publicar
+    # subtítulos en URL"). Es una URL firmada: tratarla como secreto, igual que
+    # RTMP_STREAM_KEY. Vacía = no se envían. YouTube admite UNA sola pista.
+    youtube_captions_url: str = ""
+    youtube_captions_idioma: Literal["es", "en"] = "en"
 
     # --- Página pública (/ y /en, ver app/web.py) ---
     # ID del canal de YouTube cuyo vivo se muestra en la página (empieza con

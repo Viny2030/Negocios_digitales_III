@@ -80,7 +80,12 @@ def cues(nombre_clip: str, idioma: str) -> tuple[tuple[float, float, str], ...]:
     return _cues_cacheados(str(ruta), ruta.stat().st_mtime)
 
 
-def subtitulos_al_aire(idioma: str, ahora: datetime | None = None, ventana: float = VENTANA_SEG) -> dict:
+def subtitulos_al_aire(
+    idioma: str, ahora: datetime | None = None, ventana: float = VENTANA_SEG, demora: float | None = None
+) -> dict:
+    """`demora` None = settings.subtitulos_demora_seg (lo que ve quien mira el
+    embed). El envío a YouTube (core/subtitulos_youtube.py) pasa 0: YouTube
+    sincroniza los subtítulos con la señal por su cuenta."""
     emision = streamer.emision_actual()
     if emision is None:
         return {"al_aire": False, "clip": None, "cues": []}
@@ -91,7 +96,7 @@ def subtitulos_al_aire(idioma: str, ahora: datetime | None = None, ventana: floa
 
     total = sum(duraciones)
     ahora = ahora or datetime.now(UTC)
-    t = (ahora - inicio).total_seconds() - settings.subtitulos_demora_seg
+    t = (ahora - inicio).total_seconds() - (settings.subtitulos_demora_seg if demora is None else demora)
     if t >= 0:
         pos, rel = t % total, 0.0  # posición dentro de la vuelta actual del loop
     else:

@@ -43,11 +43,25 @@ logger = logging.getLogger("media_service")
 # aspect ratio original (force_original_aspect_ratio=decrease) y se
 # rellena el resto del cuadro 1920x1080 con barras negras (pad) en vez de
 # estirar — mismo resultado que antes para un fondo que ya es 16:9.
-PERFIL_VIDEO = [
-    "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p",
-    "-r", "30",
-    "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black",
-]
+#
+# FIX 2026-11-27: YouTube avisaba "la tasa de bits es inferior a la
+# recomendada". Una placa fija con la configuración por defecto de libx264
+# pesaba 0,05-0,3 Mbps (YouTube pide ~4-10 Mbps CBR para 1080p30) y además
+# ponía un keyframe cada 8,3 s (YouTube: cada 2 s, nunca más de 4, GOP
+# cerrado). Como el streamer emite con -c copy, esto se resuelve acá, al
+# generar cada clip: bitrate constante (nal-hrd=cbr rellena con "filler" lo
+# que una imagen fija no necesita) y keyframe fijo cada 2 s. Los clips viejos
+# hay que recodificarlos: scripts/renormalizar_clips.py (no gasta IA).
+def _perfil_video() -> list[str]:
+    kbps = settings.video_bitrate_kbps
+    return [
+        "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p",
+        "-r", "30",
+        "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black",
+        "-b:v", f"{kbps}k", "-minrate", f"{kbps}k", "-maxrate", f"{kbps}k", "-bufsize", f"{2 * kbps}k",
+        "-x264-params", "nal-hrd=cbr",
+        "-g", "60", "-keyint_min", "60", "-sc_threshold", "0", "-flags", "+cgop",  # keyframe cada 2 s a 30 fps, GOP cerrado
+    ]
 # FIX 2026-09-04: sin "-pix_fmt yuv420p" explícito, libx264 puede terminar
 # heredando el espacio de color del origen (ej. rgb24 o 4:4:4) y el perfil
 # "high" rechaza eso de entrada ("high profile doesn't support 4:4:4") —
@@ -55,7 +69,7 @@ PERFIL_VIDEO = [
 # Con clips reales (casi siempre ya en yuv420p) el bug no se nota, pero
 # conviene forzarlo igual: es también el formato más compatible para
 # ingesta RTMP en general.
-PERFIL_AUDIO = ["-c:a", "aac", "-ar", "44100", "-ac", "2"]
+PERFIL_AUDIO = ["-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2"]
 
 
 class MediaValidationError(Exception):
@@ -124,7 +138,7 @@ def armar_clip_narrado(
         settings.ffmpeg_bin, "-y",
         *entrada_video,
         "-i", str(audio_path),
-        *PERFIL_VIDEO, *PERFIL_AUDIO,
+        *_perfil_video(), *PERFIL_AUDIO,
         "-shortest",  # corta cuando termina el audio (la imagen/color son "infinitos")
         str(destino),
     ]
@@ -148,7 +162,7 @@ def normalizar_clip(origen: Path, destino: Path) -> Path:
     destino.parent.mkdir(parents=True, exist_ok=True)
     comando = [
         settings.ffmpeg_bin, "-y", "-i", str(origen),
-        *PERFIL_VIDEO, *PERFIL_AUDIO,
+        *_perfil_video(), *PERFIL_AUDIO,
         str(destino),
     ]
     logger.info(f"Normalizando {origen.name} → {destino.name}")

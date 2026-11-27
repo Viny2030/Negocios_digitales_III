@@ -84,6 +84,15 @@ def subtitulos(idioma: Literal["es", "en"] = "en") -> SubtitulosAlAire:
     return SubtitulosAlAire(**subtitulos_al_aire(idioma))
 
 
+@router.get("/subtitulos/youtube")
+def subtitulos_youtube_estado() -> dict:
+    """Estado del envío de subtítulos a YouTube (core/subtitulos_youtube.py):
+    si está activo, cuántos subtítulos aceptó YouTube y el último error."""
+    from app.core.subtitulos_youtube import emisor_subtitulos
+
+    return emisor_subtitulos.estado()
+
+
 @router.get("/watchdog", response_model=WatchdogStatus)
 def watchdog_status() -> WatchdogStatus:
     """Estado del watchdog que reinicia el streamer solo si se cae

@@ -170,11 +170,19 @@ def generar_voz(texto: str, nombre_archivo: str, voice_id: str | None = None) ->
             f"de silencio como placeholder en {destino}. Ver README para "
             f"descargar el modelo."
         )
-        subprocess.run(
-            [settings.ffmpeg_bin, "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-             "-t", "3", str(destino)],
-            capture_output=True,
-        )
+        try:
+            resultado = subprocess.run(
+                [settings.ffmpeg_bin, "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+                 "-t", "3", str(destino)],
+                capture_output=True, text=True,
+            )
+        except FileNotFoundError as e:
+            raise ServicioIAError(f"No se encontró ffmpeg ({settings.ffmpeg_bin}) para el wav placeholder: {e}") from e
+        # Antes no se miraba el resultado: si ffmpeg fallaba, se devolvía la
+        # ruta de un archivo que no existía y el error aparecía más adelante,
+        # al armar el video, con un mensaje que no apuntaba a la causa.
+        if resultado.returncode != 0 or not destino.exists():
+            raise ServicioIAError(f"ffmpeg no pudo generar el wav placeholder {destino.name}: {resultado.stderr[-800:]}")
         return destino
 
     comando = [settings.piper_bin, "-m", str(modelo), "-f", str(destino)]

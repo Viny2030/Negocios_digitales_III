@@ -59,7 +59,7 @@ a un servidor RTMP local (ej. `mediamtx`) en vez de a YouTube.
    ```
 3. Agregarlo a la playlist: `POST /api/v1/playlist` con
    `{"filename": "original_norm.mp4"}`.
-4. Si el streamer ya está corriendo, `POST /api/v1/playlist/reload` para
+4. Si el streamer ya está corriendo, `POST /api/v1/stream/reload` para
    que tome el cambio (corta la señal un par de segundos, ver limitación
    documentada en `core/streamer.py`).
 

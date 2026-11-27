@@ -143,7 +143,10 @@ class SchedulerBloques:
         while not self._detener.is_set():
             bloque = bloque_actual()
             if bloque.nombre != self._bloque_actual:
-                self._aplicar(bloque)
+                # En un hilo aparte: reload() hace stop() de ffmpeg, que puede
+                # esperar hasta 10 s; corrido directo en el loop de asyncio
+                # congelaba TODA la API (incluido el healthcheck) mientras tanto.
+                await asyncio.to_thread(self._aplicar, bloque)
             try:
                 await asyncio.wait_for(self._detener.wait(), timeout=INTERVALO_CHEQUEO_SEG)
             except TimeoutError:

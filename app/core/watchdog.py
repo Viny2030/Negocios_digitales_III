@@ -62,7 +62,9 @@ class StreamWatchdog:
             except TimeoutError:
                 pass  # chequeo normal cada watchdog_check_interval_seg
 
-            self.chequear()
+            # En un hilo aparte, igual que el scheduler: start() puede tardar y
+            # no tiene que frenar el loop de asyncio que atiende la API.
+            await asyncio.to_thread(self.chequear)
 
     def chequear(self) -> None:
         """Un chequeo del watchdog (separado del loop para poder testearlo)."""

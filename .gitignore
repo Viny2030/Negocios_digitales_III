@@ -11,6 +11,14 @@ media/videos/*
 media/audio/*
 !media/audio/.gitkeep
 
+# La playlist la escribe el scheduler en cada cambio de bloque (y al arrancar):
+# versionarla dejaba el repo "modificado" solo con levantar el servicio, y la
+# versión commiteada viajaba dentro de la imagen Docker. clip_prueba.mp4 era un
+# clip de prueba suelto en media/ que no usa ningún bloque.
+media/playlist.txt
+media/playlist.tmp
+media/clip_prueba.mp4
+
 # Modelo de voz Piper (.onnx, ~100MB+): se hornea en la imagen Docker (ver
 # Dockerfile) o se descarga a mano en desarrollo — no se versiona en git.
 media/tts/*

@@ -37,6 +37,13 @@ def test_en_desarrollo_sin_keys_devuelve_simulado():
     assert generar_guion("becas").startswith("[SIMULADO]")
 
 
+def test_voz_placeholder_falla_claro_si_ffmpeg_no_esta(monkeypatch):
+    """Antes devolvía la ruta de un wav que nunca se creó."""
+    monkeypatch.setattr(settings, "ffmpeg_bin", "ffmpeg-que-no-existe-xyz")
+    with pytest.raises(ServicioIAError, match="placeholder"):
+        generar_voz("hola", "placeholder_sin_ffmpeg")
+
+
 def test_en_produccion_no_hay_guion_simulado_ni_voz_muda(monkeypatch):
     monkeypatch.setattr(settings, "app_env", "production")
     with pytest.raises(ServicioIAError):

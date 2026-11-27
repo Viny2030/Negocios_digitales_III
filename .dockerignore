@@ -32,3 +32,9 @@ media/videos/*
 media/audio/*
 !media/audio/.gitkeep
 media/tts/*
+# Generada en runtime por el scheduler; un build local no debe hornear la del disco.
+media/playlist.txt
+media/playlist.tmp
+media/clip_prueba.mp4
+# Volcados de contexto para LLMs, no son parte del servicio.
+repomix-*.xml

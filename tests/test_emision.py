@@ -92,6 +92,69 @@ def test_watchdog_no_toca_un_stream_parado_a_proposito(monkeypatch):
     assert falso.starts == 0
 
 
+def test_cambio_de_bloque_no_congela_el_loop_de_asyncio(monkeypatch):
+    """reload() puede tardar hasta 10 s (stop de ffmpeg). Antes corría dentro
+    del loop de asyncio y congelaba toda la API mientras tanto."""
+    import asyncio
+    import time
+
+    class _StreamerLento(_StreamerFalso):
+        def reload(self):
+            time.sleep(1.0)  # simula un ffmpeg que tarda en cerrar
+            super().reload()
+
+    lento = _StreamerLento(corriendo=True, falla=False)
+    monkeypatch.setattr(scheduler_module, "streamer", lento)
+    monkeypatch.setattr(scheduler_module, "escribir_playlist", lambda nombres: None)
+
+    async def escenario():
+        s = scheduler_module.SchedulerBloques()
+        s.start()
+        t0 = time.perf_counter()
+        # Mientras el ciclo está en el reload lento, otra corrutina (ej. un
+        # request) tiene que poder correr: este sleep de 50 ms no puede
+        # terminar tarde. Con el reload dentro del loop tardaba ~1 s.
+        await asyncio.sleep(0.05)
+        demora = time.perf_counter() - t0
+        while lento.reloads == 0:
+            await asyncio.sleep(0.05)
+        s.stop()
+        return demora
+
+    assert asyncio.run(escenario()) < 0.3
+    assert lento.reloads == 1
+
+
+def test_reload_y_start_concurrentes_no_se_pisan(monkeypatch, tmp_path):
+    """Un start() que llega en medio de un reload() espera a que termine, en
+    vez de colarse entre su stop() y su start()."""
+    import threading
+    import time
+
+    from app.core.streamer import FFmpegStreamer
+
+    s = FFmpegStreamer()
+    orden = []
+
+    def stop_lento(timeout=10.0):
+        orden.append("stop-ini")
+        time.sleep(0.3)
+        orden.append("stop-fin")
+
+    def start_registrado():
+        with s._ciclo_vida:
+            orden.append("start")
+
+    monkeypatch.setattr(s, "stop", stop_lento)
+    monkeypatch.setattr(s, "start", start_registrado)
+    hilo = threading.Thread(target=s.reload)
+    hilo.start()
+    time.sleep(0.1)  # el reload ya está dentro de stop()
+    s.start()  # un POST /stream/start concurrente
+    hilo.join()
+    assert orden == ["stop-ini", "stop-fin", "start", "start"]
+
+
 @pytest.mark.parametrize("corriendo,esperado", [(True, "recargado"), (False, "arrancado")])
 def test_cambio_de_bloque_levanta_el_stream_si_estaba_caido(monkeypatch, corriendo, esperado):
     falso = _StreamerFalso(corriendo=corriendo, falla=False)

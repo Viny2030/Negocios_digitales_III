@@ -68,6 +68,12 @@ class FFmpegStreamer:
     def __init__(self) -> None:
         self._estado = _EstadoStreamer()
         self._lock = threading.Lock()
+        # Serializa start/stop/reload completos. _lock solo protege el estado y
+        # se suelta a mitad de stop(); sin esto, un POST /stream/start podía
+        # colarse entre el stop() y el start() de un reload() del scheduler
+        # (ahora que el scheduler corre en un hilo aparte). RLock porque
+        # reload() llama a stop() y start(), que también lo toman.
+        self._ciclo_vida = threading.RLock()
         self._reader_thread: threading.Thread | None = None
         # Flag para el watchdog (ver core/watchdog.py): True mientras se
         # supone que el streamer tiene que estar transmitiendo (lo pusimos
@@ -121,7 +127,7 @@ class FFmpegStreamer:
                 logger.error(f"ffmpeg terminó con código {proceso.returncode} — ver last_log_lines en /status")
 
     def start(self) -> None:
-        with self._lock:
+        with self._ciclo_vida, self._lock:
             if self._estado.proceso is not None and self._estado.proceso.poll() is None:
                 raise RuntimeError("El streamer ya está corriendo — llamá a /stop o /reload primero.")
             comando = self._comando_ffmpeg()
@@ -144,18 +150,19 @@ class FFmpegStreamer:
             self._reader_thread.start()
 
     def stop(self, timeout: float = 10.0) -> None:
-        with self._lock:
-            proceso = self._estado.proceso
-            self._debe_estar_corriendo = False  # parada intencional — el watchdog no debe reiniciarlo
-        if proceso is None or proceso.poll() is not None:
-            return  # ya estaba parado, no es un error
-        proceso.terminate()  # SIGTERM — le da tiempo a ffmpeg a cerrar el stream prolijo
-        try:
-            proceso.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            logger.warning("ffmpeg no respondió a SIGTERM a tiempo — forzando con SIGKILL")
-            proceso.kill()
-            proceso.wait()
+        with self._ciclo_vida:
+            with self._lock:
+                proceso = self._estado.proceso
+                self._debe_estar_corriendo = False  # parada intencional — el watchdog no debe reiniciarlo
+            if proceso is None or proceso.poll() is not None:
+                return  # ya estaba parado, no es un error
+            proceso.terminate()  # SIGTERM — le da tiempo a ffmpeg a cerrar el stream prolijo
+            try:
+                proceso.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                logger.warning("ffmpeg no respondió a SIGTERM a tiempo — forzando con SIGKILL")
+                proceso.kill()
+                proceso.wait()
 
     def debe_estar_corriendo(self) -> bool:
         """Usado por el watchdog (ver core/watchdog.py) para distinguir un
@@ -166,8 +173,9 @@ class FFmpegStreamer:
     def reload(self) -> None:
         """Reinicia el proceso para que relea la playlist. Ver limitación en
         el docstring del módulo: esto corta la señal un par de segundos."""
-        self.stop()
-        self.start()
+        with self._ciclo_vida:
+            self.stop()
+            self.start()
 
     def status(self) -> dict:
         with self._lock:

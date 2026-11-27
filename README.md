@@ -43,6 +43,13 @@ bloque de la grilla). Todos los nodos llevan su nombre en los dos idiomas.
   `--contexto` busca la ficha oficial de las que faltan (sin IA);
   `--generar` las genera por `POST /ai/clip` a partir de esa ficha (gasta
   crédito de IA; el servidor tiene que estar corriendo).
+- **Guiones escritos a mano** en `contenido/guiones/<archivo>.json` (`fuente`
+  = ficha oficial, `guion`, `guion_en` con una traducción por oración,
+  `revisado`): si existe, `--generar` lo usa tal cual y **no llama a la API de
+  Anthropic**; `--sin-ia` saltea las carreras sin guion escrito y
+  `--validar-guiones` comprueba la correspondencia de oraciones. Ojo: la
+  suscripción de Claude (claude.ai / Claude Code) no incluye crédito de API;
+  la generación automática por LLM necesita saldo propio en la Console.
 - Los `.ps1` (`cargar_bloques.ps1` y compañía) quedaron **obsoletos**: generan
   nombres de la grilla anterior (`foco_grado_*`, `posgrado_*`) que el scheduler
   ya no programa. `cargar_carreras.py --renombrar` pasa esos clips al nombre nuevo.

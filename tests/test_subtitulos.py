@@ -115,3 +115,40 @@ def test_clip_con_movimiento_y_rotulo_dura_lo_mismo_que_la_voz(media_tmp):
         assert not list(destino.parent.glob(".rotulo_prueba.*"))  # temporales borrados
     finally:
         destino.unlink(missing_ok=True)
+
+
+def test_clip_con_guion_escrito_no_llama_al_llm(monkeypatch, media_tmp):
+    monkeypatch.setattr(ai_generator, "generar_guion", lambda *a: pytest.fail("no debía pedir guion al LLM"))
+    monkeypatch.setattr(ai_generator, "traducir_oraciones", lambda o: pytest.fail("no debía traducir"))
+    monkeypatch.setattr(ai_generator, "armar_clip_narrado", lambda *a, **k: None)
+    r = client.post(
+        "/api/v1/ai/clip",
+        json={"tema": "t", "nombre_archivo": "escrito", "agregar_a_playlist": False,
+              "guion": "Hola. Chau.", "guion_en": ["Hi.", "Bye."]},
+    )
+    assert r.status_code == 200, r.text
+    assert "Bye." in open(r.json()["subtitulos"]["en"], encoding="utf-8").read()
+
+
+def test_clip_con_traduccion_desalineada_responde_422(monkeypatch):
+    monkeypatch.setattr(ai_generator, "armar_clip_narrado", lambda *a, **k: pytest.fail("no debía armar nada"))
+    r = client.post(
+        "/api/v1/ai/clip",
+        json={"tema": "t", "nombre_archivo": "mal", "guion": "Uno. Dos.", "guion_en": ["One."]},
+    )
+    assert r.status_code == 422 and "coincidir" in r.json()["detail"]
+
+
+def test_guiones_versionados_estan_alineados_y_en_el_catalogo():
+    import json
+    from pathlib import Path
+
+    from app.core.catalogo import PROGRAMAS
+
+    carpeta = Path(__file__).resolve().parent.parent / "contenido" / "guiones"
+    archivos = {p.nombre_archivo for p in PROGRAMAS}
+    for ruta in carpeta.glob("*.json"):
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
+        assert ruta.stem in archivos, f"{ruta.name} no corresponde a ninguna carrera del catálogo"
+        assert len(dividir_oraciones(datos["guion"])) == len(datos["guion_en"]), ruta.name
+        assert datos["fuente"].startswith("https://www.umsa.edu.ar/")

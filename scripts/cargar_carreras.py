@@ -4,8 +4,14 @@ scripts/cargar_carreras.py — Clips de todas las carreras de la UMSA (core/cata
     python scripts/cargar_carreras.py                 # estado: qué carreras tienen clip y subtítulos
     python scripts/cargar_carreras.py --renombrar     # pasa los clips viejos (foco_grado_*, posgrado_*) al nombre nuevo
     python scripts/cargar_carreras.py --contexto      # busca la ficha oficial de las que faltan y muestra qué se usaría (sin IA)
-    python scripts/cargar_carreras.py --generar [--limite N] [--api http://127.0.0.1:8000]
-                                                      # genera con POST /api/v1/ai/clip las que faltan (GASTA crédito de IA)
+    python scripts/cargar_carreras.py --generar [--limite N] [--api http://127.0.0.1:8000] [--sin-ia]
+                                                      # genera con POST /api/v1/ai/clip las que faltan
+    python scripts/cargar_carreras.py --validar-guiones
+
+Guiones escritos a mano: si existe contenido/guiones/<nombre_archivo>.json
+({"fuente": url, "guion": "...", "guion_en": [una traducción por oración]}),
+--generar lo usa tal cual y NO llama al LLM (no gasta crédito de API). Sin
+ese archivo, el guion lo escribe el LLM (GASTA crédito); --sin-ia saltea esas.
 
 El guion de cada carrera se escribe a partir del texto de su ficha en
 umsa.edu.ar (se busca el link en el listado oficial de grado o de posgrado):
@@ -18,6 +24,7 @@ cargar_bloques.ps1 y compañía, que usaban los nombres de la grilla anterior.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unicodedata
@@ -31,7 +38,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings  # noqa: E402
 from app.core.catalogo import FACULTADES, PROGRAMAS, RENOMBRES_ANTERIORES, Programa  # noqa: E402
-from app.services.subtitulos import ruta_subtitulos  # noqa: E402
+from app.services.subtitulos import dividir_oraciones, ruta_subtitulos  # noqa: E402
+
+GUIONES = Path(__file__).resolve().parent.parent / "contenido" / "guiones"
 
 LISTADOS = {
     "grado": "https://www.umsa.edu.ar/carreras-de-grado/",
@@ -152,12 +161,39 @@ def renombrar() -> None:
         print(f"  {origen.name} -> {destino.name}")
 
 
-def generar(api: str, limite: int | None, mostrar_solo: bool) -> int:
+def guion_escrito(p: Programa) -> dict | None:
+    """Guion ya escrito y revisado en contenido/guiones/<nombre_archivo>.json
+    ({"guion": "...", "guion_en": [...]}): se usa en vez de pedírselo al LLM."""
+    ruta = GUIONES / f"{p.nombre_archivo}.json"
+    return json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else None
+
+
+def validar_guiones() -> int:
+    """Cada guion_en tiene que tener una entrada por oración del guion (así
+    hereda sus tiempos en los subtítulos)."""
+    errores = 0
+    for p in PROGRAMAS:
+        g = guion_escrito(p)
+        if g is None:
+            continue
+        n_es, n_en = len(dividir_oraciones(g["guion"])), len(g["guion_en"])
+        palabras = len(g["guion"].split())
+        estado = "OK " if n_es == n_en else "MAL"
+        errores += n_es != n_en
+        print(f"  {estado} {p.nombre_archivo}: {n_es} oraciones es / {n_en} en, {palabras} palabras")
+    return 1 if errores else 0
+
+
+def generar(api: str, limite: int | None, mostrar_solo: bool, sin_ia: bool = False) -> int:
     faltantes = [p for p in PROGRAMAS if not tiene_clip(p)][:limite]
     headers = {"X-Admin-Token": os.environ["ADMIN_TOKEN"]} if os.environ.get("ADMIN_TOKEN") else {}
     errores = 0
     for p in faltantes:
-        url, contexto = contexto_de(p)
+        escrito = guion_escrito(p)
+        if escrito is None and sin_ia:
+            print(f"\n== {p.nombre_archivo}: sin guion escrito en {GUIONES.name}/ — se saltea (--sin-ia)")
+            continue
+        url, contexto = (escrito.get("fuente"), "guion escrito") if escrito else contexto_de(p)
         print(f"\n== {p.nombre_archivo}  ({p.nombre})\n   ficha: {url or 'NO ENCONTRADA'}")
         if not contexto:
             print("   sin ficha: se saltea (no se genera un guion sin datos oficiales)")
@@ -176,6 +212,8 @@ def generar(api: str, limite: int | None, mostrar_solo: bool) -> int:
             "rotulo_secundario": f"{facultad} · {p.nivel.capitalize()} · {p.modalidad}",
             "agregar_a_playlist": False,  # la playlist la arma el scheduler según la franja de cada facultad
         }
+        if escrito:
+            cuerpo.update(guion=escrito["guion"], guion_en=escrito["guion_en"])
         try:
             r = CLIENTE.post(f"{api}/api/v1/ai/clip", json=cuerpo, headers=headers, timeout=600)
             r.raise_for_status()
@@ -191,10 +229,12 @@ def main() -> int:
     if "--renombrar" in args:
         renombrar()
         return 0
+    if "--validar-guiones" in args:
+        return validar_guiones()
     if "--contexto" in args or "--generar" in args:
         limite = int(args[args.index("--limite") + 1]) if "--limite" in args else None
         api = args[args.index("--api") + 1] if "--api" in args else "http://127.0.0.1:8000"
-        return generar(api, limite, mostrar_solo="--generar" not in args)
+        return generar(api, limite, mostrar_solo="--generar" not in args, sin_ia="--sin-ia" in args)
     estado()
     return 0
 

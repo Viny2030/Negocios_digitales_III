@@ -72,6 +72,12 @@ class ClipRequest(BaseModel):
     # guion tal cual; "en" cuesta una llamada extra al LLM (traducción). []
     # = sin subtítulos.
     subtitulos: list[Literal["es", "en"]] = ["es", "en"]
+    # Guion ya escrito (y revisado) en vez de pedírselo al LLM: no gasta
+    # crédito de API. `guion_en` es su traducción, UNA entrada por oración del
+    # guion y en el mismo orden (ver services/subtitulos.dividir_oraciones);
+    # si falta y se piden subtítulos "en", se traduce con el LLM.
+    guion: str | None = Field(default=None, max_length=6000)
+    guion_en: list[str] | None = None
 
 
 class ClipResponse(BaseModel):
@@ -115,12 +121,22 @@ def crear_clip(body: ClipRequest) -> ClipResponse:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
+    if body.guion is not None and body.guion_en is not None:
+        n = len(dividir_oraciones(body.guion))
+        if len(body.guion_en) != n:
+            raise HTTPException(
+                status_code=422,
+                detail=f"guion_en tiene {len(body.guion_en)} oraciones y el guion {n}: tienen que coincidir una a una",
+            )
+
     try:
-        guion = generar_guion(body.tema, body.contexto)
+        guion = body.guion if body.guion is not None else generar_guion(body.tema, body.contexto)
         oraciones = dividir_oraciones(guion)
         # La traducción va ANTES de la voz y del video: si falla, no se
         # dejan a medio armar un wav y un mp4 sin sus subtítulos.
-        guion_en = traducir_oraciones(oraciones) if "en" in body.subtitulos else None
+        guion_en = None
+        if "en" in body.subtitulos:
+            guion_en = body.guion_en if body.guion_en is not None else traducir_oraciones(oraciones)
         voz = sintetizar_oraciones(oraciones, body.nombre_archivo, voice_id=body.voice_id)
     except ServicioIAError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e

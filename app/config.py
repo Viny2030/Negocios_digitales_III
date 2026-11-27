@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # avisa "tasa de bits inferior a la recomendada". OJO costo: la emisión
     # 24/7 sube esto sin parar (5000 kbps ≈ 54 GB/día ≈ 1,6 TB/mes de salida).
     video_bitrate_kbps: int = 5000
+    # Fuente .ttf del rótulo (nombre de carrera y facultad) de los clips. Vacío =
+    # DejaVu Sans Bold en la imagen Docker o Segoe UI / Arial en Windows.
+    fuente_rotulos: str = ""
 
     # --- Playlist / medios ---
     # Raíz de medios: `imagen_fondo` (POST /ai/clip) solo puede apuntar a un

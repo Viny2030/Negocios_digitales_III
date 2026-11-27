@@ -92,6 +92,13 @@ def _completar_anthropic(sistema: str, usuario: str, max_tokens: int) -> str:
         system=sistema,
         messages=[{"role": "user", "content": usuario}],
     )
+    # Los modelos actuales razonan por defecto y ese razonamiento descuenta de
+    # max_tokens: un guion cortado a mitad de frase saldría al aire tal cual.
+    # Cortado o rechazado = falla de este proveedor (se prueba el siguiente).
+    if respuesta.stop_reason == "max_tokens":
+        raise ValueError(f"respuesta cortada por max_tokens={max_tokens}")
+    if respuesta.stop_reason == "refusal":
+        raise ValueError("el modelo rechazó la solicitud (stop_reason=refusal)")
     return "".join(bloque.text for bloque in respuesta.content if bloque.type == "text")
 
 
@@ -112,7 +119,7 @@ def _completar(
     usuario: str,
     tarea: str,
     validar: Callable[[str], T],
-    max_tokens: int = 800,
+    max_tokens: int = 8000,  # holgado: incluye el razonamiento del modelo, no solo el texto final
 ) -> T | None:
     """Prueba los proveedores configurados en orden (Anthropic, OpenAI) y
     devuelve `validar(respuesta)` del primero que funcione. `validar` lanza
@@ -204,7 +211,7 @@ def traducir_oraciones(oraciones: list[str], idioma: str = "en") -> list[str]:
         usuario,
         "la traducción al inglés",
         _parsear_traduccion(len(oraciones)),
-        max_tokens=max(800, len(usuario)),  # ~1 token cada 3-4 caracteres: holgado
+        max_tokens=max(8000, 2 * len(usuario)),  # holgado: el razonamiento del modelo también descuenta
     )
     if traduccion is not None:
         return traduccion

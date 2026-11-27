@@ -172,6 +172,8 @@ def generar(api: str, limite: int | None, mostrar_solo: bool) -> int:
             "contexto": f"Datos oficiales de la ficha de la carrera ({url}). Usá solo estos datos:\n{contexto}",
             "nombre_archivo": p.nombre_archivo,
             "imagen_fondo": p.placa,
+            "rotulo": p.nombre,
+            "rotulo_secundario": f"{facultad} · {p.nivel.capitalize()} · {p.modalidad}",
             "agregar_a_playlist": False,  # la playlist la arma el scheduler según la franja de cada facultad
         }
         try:

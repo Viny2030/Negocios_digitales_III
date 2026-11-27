@@ -90,3 +90,28 @@ def test_scheduler_solo_toma_videos(media_tmp):
     finally:
         for nombre in nombres:
             (videos / nombre).unlink()
+
+
+def test_clip_con_movimiento_y_rotulo_dura_lo_mismo_que_la_voz(media_tmp):
+    """Antes quedaban ~2 s de video mudo al final (-shortest con imagen en loop)."""
+    import subprocess
+
+    from app.services.media_service import armar_clip_narrado, probar_clip
+
+    audio = media_tmp / "audio_rotulo.wav"
+    placa = media_tmp / "placas" / "vertical.png"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=d=1.5", str(audio)], check=True)
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=400x900", "-frames:v", "1", str(placa)],
+        check=True,
+    )
+    destino = media_tmp / "videos" / "rotulo_prueba.mp4"
+    try:
+        armar_clip_narrado(audio, destino, imagen_fondo=placa, rotulo="Licenciatura en Psicología: 100% práctica",
+                           rotulo_secundario="Facultad de Ciencias Humanas · Grado · presencial")
+        info = probar_clip(destino)
+        assert info["resolucion"] == "1920x1080"
+        assert abs(info["duracion_seg"] - 1.5) < 0.1
+        assert not list(destino.parent.glob(".rotulo_prueba.*"))  # temporales borrados
+    finally:
+        destino.unlink(missing_ok=True)

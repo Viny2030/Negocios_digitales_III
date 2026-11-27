@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.v1.playlist import agregar
 from app.config import settings
@@ -63,6 +63,10 @@ class ClipRequest(BaseModel):
     voice_id: NombreArchivo | None = None  # modelo de voz Piper para este bloque (ver plan de contenido)
     imagen_fondo: str | None = None  # ruta a una placa dentro de media/ (ej. media/placas/umsa_fondo.png)
     color_fondo: str = "black"  # se usa solo si no se pasa imagen_fondo
+    # Franja inferior del video (ej. "Licenciatura en Psicología" / "Facultad
+    # de Ciencias Humanas"). None = sin rótulo.
+    rotulo: str | None = Field(default=None, max_length=160)
+    rotulo_secundario: str | None = Field(default=None, max_length=120)
     agregar_a_playlist: bool = True
     # Subtítulos .srt a generar (ver services/subtitulos.py). "es" sale del
     # guion tal cual; "en" cuesta una llamada extra al LLM (traducción). []
@@ -123,7 +127,10 @@ def crear_clip(body: ClipRequest) -> ClipResponse:
 
     ruta_video = settings.media_dir / f"{body.nombre_archivo}.mp4"
     try:
-        armar_clip_narrado(voz.ruta, ruta_video, imagen_fondo=imagen, color_fondo=body.color_fondo)
+        armar_clip_narrado(
+            voz.ruta, ruta_video, imagen_fondo=imagen, color_fondo=body.color_fondo,
+            rotulo=body.rotulo, rotulo_secundario=body.rotulo_secundario,
+        )
     except MediaValidationError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

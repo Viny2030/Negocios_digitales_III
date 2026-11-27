@@ -81,11 +81,12 @@ def test_clip_sin_subtitulos_no_llama_a_la_traduccion(monkeypatch, media_tmp):
 def test_scheduler_solo_toma_videos(media_tmp):
     """Un .srt con el prefijo del bloque en media/videos cortaría la emisión."""
     videos = media_tmp / "videos"
-    for nombre in ("posgrado_zz.mp4", "posgrado_zz.en.srt", "posgrado_zz.tmp"):
+    nombres = ("hum_posgrado_zz.mp4", "hum_posgrado_zz.en.srt", "hum_posgrado_zz.tmp")
+    for nombre in nombres:
         (videos / nombre).write_bytes(b"")
     try:
-        bloque = next(b for b in scheduler_module.GRILLA if b.prefijo == "posgrado_")
-        assert scheduler_module._clips_para(bloque) == ["posgrado_zz.mp4"]
+        bloque = next(b for b in scheduler_module.GRILLA if b.facultad == "hum")
+        assert scheduler_module._clips_para(bloque) == ["hum_posgrado_zz.mp4"]
     finally:
-        for nombre in ("posgrado_zz.mp4", "posgrado_zz.en.srt", "posgrado_zz.tmp"):
+        for nombre in nombres:
             (videos / nombre).unlink()

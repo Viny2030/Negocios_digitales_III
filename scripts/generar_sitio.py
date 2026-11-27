@@ -15,6 +15,8 @@ tests/test_sitio.py falla si quedaron desactualizados.
 """
 from __future__ import annotations
 
+import sys
+import textwrap
 from html import escape
 from pathlib import Path
 
@@ -91,44 +93,46 @@ COLUMNAS_FUNC = {
 }
 
 # --------------------------------------------------------------------------
-# Grafo de información: bloque de la grilla ↔ contenido que emite.
-# Las franjas y prefijos son los de GRILLA en app/core/scheduler.py
-# (tests/test_sitio.py comprueba que todos los bloques estén acá).
+# Grafo de información: bloque de la grilla ↔ carreras que emite. Sale de
+# GRILLA (app/core/scheduler.py) y del catálogo (app/core/catalogo.py): no
+# hay una tercera copia de la oferta académica que se pueda desactualizar.
 # --------------------------------------------------------------------------
-BLOQUES = [
-    # id, fila, nombre, franja, prefijo
-    ("despierta", 0, "UMSA Despierta", "07–10 h", "umsa_despierta_"),
-    ("foco", 3.5, "Foco Grado y Vocación", "10–13 h", "foco_grado_"),
-    ("ext", 7, "Extensión y Comunidad", "13–16 h", "extension_"),
-    ("pos", 9.5, "Espacio Posgrados y Negocios", "16–19 h", "posgrado_"),
-    ("prime", 12.4, "Prime Time: Clases Abiertas", "19–22 h", "primetime_"),
-    ("lounge", 13.6, "UMSA Study Lounge", "22–07 h", "studylounge_"),
-]
-CONTENIDOS = [
-    # id, fila, bloque, texto es, texto en
-    ("agenda", 0, "despierta", "Agenda, becas y convocatorias", "Agenda, grants and calls"),
-    ("abogacia", 1, "foco", "Abogacía", "Law"),
-    ("artes", 2, "foco", "Artes Visuales", "Visual Arts"),
-    ("contador", 3, "foco", "Contador Público", "Public Accountant"),
-    ("negocios", 4, "foco", "Negocios Digitales", "Digital Business"),
-    ("psicologia", 5, "foco", "Psicología", "Psychology"),
-    ("traductorado", 6, "foco", "Traductorado de Inglés", "English Translation"),
-    ("vinculacion", 7, "ext", "Vinculación institucional", "Institutional outreach"),
-    ("bioetica", 8, "pos", "Posgrado en Bioética", "Graduate: Bioethics"),
-    ("derecho", 9, "pos", "Posgrado en Derecho", "Graduate: Law"),
-    ("fono", 10, "pos", "Posgrado en Fonoaudiología", "Graduate: Speech Therapy"),
-    ("museologia", 11, "pos", "Posgrado en Museología", "Graduate: Museology"),
-    ("respaldo", 13, None, "Respaldo: loop institucional", "Fallback: institutional loop"),
-]
-BLOQUE_EN = {
+sys.path.insert(0, str(RAIZ))
+from app.core.catalogo import FACULTADES, PROGRAMAS  # noqa: E402
+from app.core.scheduler import GRILLA  # noqa: E402
+
+_NOMBRES_EN_OTROS = {
     "UMSA Despierta": "UMSA Wakes Up",
-    "Foco Grado y Vocación": "Undergraduate & Vocation",
-    "Extensión y Comunidad": "Outreach & Community",
-    "Espacio Posgrados y Negocios": "Graduate & Business",
     "Prime Time: Clases Abiertas": "Prime Time: Open Classes",
-    "UMSA Study Lounge": "UMSA Study Lounge",
+    "UMSA Nocturno": "UMSA Night",
 }
-COLUMNAS_INFO = {"es": ["Bloque de la grilla", "Contenido que emite"], "en": ["Schedule block", "Content it streams"]}
+BLOQUE_EN = {
+    b.nombre: (FACULTADES[b.facultad].nombre_en if b.facultad else _NOMBRES_EN_OTROS[b.nombre]) for b in GRILLA
+}
+# id, nombre, franja, prefijos, facultad
+BLOQUES = [
+    (f"b{i}", b.nombre, f"{b.hora_inicio:02d}–{b.hora_fin:02d} h", b.prefijos, b.facultad) for i, b in enumerate(GRILLA)
+]
+MODALIDAD_EN = {
+    "presencial": "in person",
+    "virtual": "online",
+    "a distancia": "distance learning",
+    "presencial o virtual": "in person or online",
+    "presencial o a distancia": "in person or distance learning",
+}
+# id, bloque, texto es, texto en, detalle es, detalle en
+CONTENIDOS = [
+    ("agenda", "b0", "Agenda, becas y convocatorias", "Agenda, grants and calls", "umsa_despierta_*", "umsa_despierta_*"),
+    *[
+        (p.nombre_archivo, next(b[0] for b in BLOQUES if b[4] == p.facultad), p.nombre, p.nombre_en,
+         f"{p.nivel.capitalize()} · {p.modalidad}",
+         f"{'Undergraduate' if p.nivel == 'grado' else 'Graduate'} · {MODALIDAD_EN[p.modalidad]}")
+        for p in PROGRAMAS
+    ],
+    ("rotacion", None, "Rotación de todas las carreras", "Rotation of all programs",
+     "de 22 a 7 h y en los bloques sin clips propios", "22–07 h and blocks without their own clips"),
+]
+COLUMNAS_INFO = {"es": ["Bloque de la grilla", "Carreras que emite"], "en": ["Schedule block", "Programs it streams"]}
 
 # --------------------------------------------------------------------------
 # Dibujo SVG
@@ -141,22 +145,32 @@ def _pos(col: float, fila: float, x0: int, paso_x: int, y0: int, paso_y: int) ->
     return x0 + col * paso_x, y0 + fila * paso_y
 
 
-def _nodo_svg(x: float, y: float, tipo: str, titulo: str, lineas: list[str]) -> str:
+def _nodo_svg(
+    x: float, y: float, tipo: str, titulo: str | list[str], lineas: list[str], ancho: int = ANCHO_NODO, alto: int = ALTO_NODO
+) -> str:
+    """`titulo` puede venir ya partido en varias líneas (nombres de carrera largos)."""
+    titulos = [titulo] if isinstance(titulo, str) else titulo
     partes = [
         f'<g class="nodo {COLORES[tipo]}">',
-        f'<rect x="{x:.0f}" y="{y:.0f}" width="{ANCHO_NODO}" height="{ALTO_NODO}" rx="8"/>',
-        f'<text x="{x + 10:.0f}" y="{y + (21 if lineas else 30):.0f}" class="t1">{escape(titulo)}</text>',
+        f'<rect x="{x:.0f}" y="{y:.0f}" width="{ancho}" height="{alto}" rx="8"/>',
     ]
+    if len(titulos) == 1 and alto == ALTO_NODO:  # caja estándar: misma disposición que siempre
+        partes.append(f'<text x="{x + 10:.0f}" y="{y + (21 if lineas else 30):.0f}" class="t1">{escape(titulos[0])}</text>')
+        y_lineas = y + 39
+    else:
+        for i, t in enumerate(titulos):
+            partes.append(f'<text x="{x + 10:.0f}" y="{y + 19 + 17 * i:.0f}" class="t1">{escape(t)}</text>')
+        y_lineas = y + 19 + 17 * len(titulos) + 2
     for i, linea in enumerate(lineas):
-        partes.append(f'<text x="{x + 10:.0f}" y="{y + 39 + 14 * i:.0f}" class="t2">{escape(linea)}</text>')
+        partes.append(f'<text x="{x + 10:.0f}" y="{y_lineas + 14 * i:.0f}" class="t2">{escape(linea)}</text>')
     partes.append("</g>")
     return "".join(partes)
 
 
-def _arista_svg(a: tuple[float, float], b: tuple[float, float]) -> str:
+def _arista_svg(a: tuple[float, float], b: tuple[float, float], alto_a: float = ALTO_NODO, alto_b: float = ALTO_NODO) -> str:
     (ax, ay), (bx, by) = a, b
     if bx > ax:  # hacia adelante: borde derecho → borde izquierdo
-        x1, y1, x2, y2 = ax + ANCHO_NODO, ay + ALTO_NODO / 2, bx, by + ALTO_NODO / 2
+        x1, y1, x2, y2 = ax + ANCHO_NODO, ay + alto_a / 2, bx, by + alto_b / 2
         c = (x2 - x1) / 2
         d = f"M{x1:.0f},{y1:.0f} C{x1 + c:.0f},{y1:.0f} {x2 - c:.0f},{y2:.0f} {x2 - 4:.0f},{y2:.0f}"
     elif bx < ax:  # hacia atrás: borde izquierdo → borde derecho
@@ -195,27 +209,70 @@ def grafo_funcionamiento(lang: str) -> str:
     return _svg(x0 + 3 * px + ANCHO_NODO + 10, int(y0 + 6 * py + ALTO_NODO + 16), aria, cuerpo)
 
 
+ANCHO_CONTENIDO, CARACTERES_LINEA = 470, 58  # caja de carrera: nombres largos en hasta 2-3 líneas
+
+
+def _lineas_titulo(contenido: tuple, lang: str) -> list[str]:
+    return textwrap.wrap(contenido[2] if lang == "es" else contenido[3], CARACTERES_LINEA)
+
+
+def _layout_informacion() -> tuple[dict, dict, float]:
+    """Posición y alto de cada caja. Se calcula con el MÁS LARGO de los dos
+    idiomas, para que español e inglés compartan exactamente el mismo dibujo."""
+    x0, x1, y0, sep = 10, 330, 50, 8
+    pos, alto, y = {}, {}, y0
+    bloque_anterior = None
+    for c in CONTENIDOS:
+        if c[1] != bloque_anterior:
+            y += 14 if bloque_anterior is not None else 0  # aire entre facultades
+            bloque_anterior = c[1]
+        n = max(len(_lineas_titulo(c, "es")), len(_lineas_titulo(c, "en")))
+        alto[c[0]] = 19 + 17 * n + 14
+        pos[c[0]] = (x1, y)
+        y += alto[c[0]] + sep
+    # Cada bloque se centra frente a sus carreras; los que no tienen carreras
+    # propias (Prime Time, Nocturno) van frente a la rotación.
+    for bid, *_ in BLOQUES:
+        hijos = [c[0] for c in CONTENIDOS if c[1] == bid] or ["rotacion"]
+        arriba, abajo = pos[hijos[0]][1], pos[hijos[-1]][1] + alto[hijos[-1]]
+        pos[bid] = (x0, (arriba + abajo) / 2 - ALTO_NODO / 2)
+        alto[bid] = ALTO_NODO
+    # Prime Time y Nocturno comparten la caja de la rotación: se separan.
+    vacios = [b[0] for b in BLOQUES if not any(c[1] == b[0] for c in CONTENIDOS)]
+    for i, bid in enumerate(vacios):
+        pos[bid] = (x0, pos[bid][1] + (i - (len(vacios) - 1) / 2) * (ALTO_NODO + 10))
+    return pos, alto, max(pos[k][1] + alto[k] for k in pos)  # ninguna caja queda cortada abajo
+
+
 def grafo_informacion(lang: str) -> str:
-    x0, px, y0, py = 10, 420, 50, 58
-    pos = {b[0]: _pos(0, b[1], x0, px, y0, py) for b in BLOQUES}
-    pos.update({c[0]: _pos(1, c[1], x0, px, y0, py) for c in CONTENIDOS})
+    pos, alto, y_fin = _layout_informacion()
+    x0, x1 = 10, 330
     cuerpo = [
-        f'<text x="{x0 + i * px + ANCHO_NODO / 2:.0f}" y="24" class="col">{escape(t)}</text>'
-        for i, t in enumerate(COLUMNAS_INFO[lang])
+        f'<text x="{x0 + ANCHO_NODO / 2:.0f}" y="24" class="col">{escape(COLUMNAS_INFO[lang][0])}</text>',
+        f'<text x="{x1 + ANCHO_CONTENIDO / 2:.0f}" y="24" class="col">{escape(COLUMNAS_INFO[lang][1])}</text>',
     ]
-    for cid, _, bloque, _, _ in CONTENIDOS:
-        if bloque:
-            cuerpo.append(_arista_svg(pos[bloque], pos[cid]))
-    cuerpo += [_arista_svg(pos["prime"], pos["respaldo"]), _arista_svg(pos["lounge"], pos["respaldo"])]
+    for c in CONTENIDOS:
+        if c[1]:
+            cuerpo.append(_arista_svg(pos[c[1]], pos[c[0]], alto[c[1]], alto[c[0]]))
+    for bid, *_ in BLOQUES:
+        if not any(c[1] == bid for c in CONTENIDOS):
+            cuerpo.append(_arista_svg(pos[bid], pos["rotacion"], alto[bid], alto["rotacion"]))
     archivo = "archivos" if lang == "es" else "files"
-    for bid, _, nombre, franja, prefijo in BLOQUES:
+    for bid, nombre, franja, prefijos, _ in BLOQUES:
         titulo = nombre if lang == "es" else BLOQUE_EN[nombre]
-        cuerpo.append(_nodo_svg(*pos[bid], "bloque", titulo, [f"{franja} · {archivo} {prefijo}*"]))
-    for cid, _, _, es, en in CONTENIDOS:
-        linea = ["prueba_fondo_umsa*"] if cid == "respaldo" else []
-        cuerpo.append(_nodo_svg(*pos[cid], "contenido", es if lang == "es" else en, linea))
-    aria = "Grafo de información: bloques de la grilla y su contenido" if lang == "es" else "Information graph: schedule blocks and their content"
-    return _svg(x0 + px + ANCHO_NODO + 10, int(y0 + 13.6 * py + ALTO_NODO + 16), aria, cuerpo)
+        detalle = f"{franja} · {archivo} {prefijos[0]}*" if len(prefijos) == 1 else franja
+        cuerpo.append(_nodo_svg(*pos[bid], "bloque", titulo, [detalle]))
+    for c in CONTENIDOS:
+        detalle = c[4] if lang == "es" else c[5]
+        cuerpo.append(
+            _nodo_svg(*pos[c[0]], "contenido", _lineas_titulo(c, lang), [detalle], ancho=ANCHO_CONTENIDO, alto=alto[c[0]])
+        )
+    aria = (
+        "Grafo de información: bloques de la grilla y las carreras que emite cada uno"
+        if lang == "es"
+        else "Information graph: schedule blocks and the programs each one streams"
+    )
+    return _svg(x1 + ANCHO_CONTENIDO + 10, int(y_fin + 10), aria, cuerpo)
 
 
 # --------------------------------------------------------------------------
@@ -223,9 +280,10 @@ def grafo_informacion(lang: str) -> str:
 # --------------------------------------------------------------------------
 def _filas_grilla(lang: str) -> str:
     filas = []
-    for _, _, nombre, franja, prefijo in BLOQUES:
+    for _, nombre, franja, prefijos, _ in BLOQUES:
         titulo = nombre if lang == "es" else BLOQUE_EN[nombre]
-        filas.append(f"<tr><td>{escape(franja)}</td><td>{escape(titulo)}</td><td><code>{escape(prefijo)}*</code></td></tr>")
+        archivos = " ".join(f"<code>{escape(p)}*</code>" for p in prefijos)
+        filas.append(f"<tr><td>{escape(franja)}</td><td>{escape(titulo)}</td><td>{archivos}</td></tr>")
     return "".join(filas)
 
 
@@ -255,7 +313,7 @@ Toma clips de video ya preparados y los emite en loop con ffmpeg. La programaci�
 
 <h3>Grilla de programación</h3>
 <table><thead><tr><th>Franja (hora argentina)</th><th>Bloque</th><th>Archivos que emite</th></tr></thead><tbody>__GRILLA__</tbody></table>
-<p>Cada bloque emite los clips cuyo nombre empieza con su prefijo. Prime Time y Study Lounge todavía no tienen contenido propio: mientras tanto repiten el loop institucional (<code>prueba_fondo_umsa*</code>).</p>
+<p>Durante el día, cada una de las cinco facultades tiene su franja con todas sus carreras de grado y posgrado. De 22 a 7 se rotan todas las carreras de la universidad. Cada bloque emite los clips cuyo nombre empieza con su prefijo. Prime Time todavía no tiene contenido propio: mientras tanto, como cualquier bloque vacío, emite la rotación de todas las carreras.</p>
 
 <h3>Cómo funciona</h3>
 <p>El <a href="#grafo-funcionamiento">grafo de funcionamiento</a> se lee de izquierda a derecha:</p>
@@ -267,11 +325,11 @@ Toma clips de video ya preparados y los emite en loop con ffmpeg. La programaci�
 </ul>
 
 <h3>Qué contenido hay</h3>
-<p>El <a href="#grafo-informacion">grafo de información</a> une cada bloque de la grilla con el contenido que emite: las carreras de grado, los posgrados, la vinculación institucional y la agenda diaria. Las flechas hacia el respaldo marcan los bloques que todavía usan el loop institucional.</p>
+<p>El <a href="#grafo-informacion">grafo de información</a> une cada bloque de la grilla con las carreras que emite, facultad por facultad, con su nivel (grado o posgrado) y su modalidad según el sitio oficial de la UMSA. Las flechas hacia la rotación marcan los bloques que emiten todas las carreras.</p>
 
 <h3>Cómo cargar contenido</h3>
 <ol>
-<li><strong>Con IA:</strong> <code>POST /api/v1/ai/clip</code> con un tema, un <code>nombre_archivo</code> que empiece con el prefijo del bloque (por ejemplo <code>foco_grado_medicina</code>) y, si querés, una placa de <code>media/placas</code>. Genera guion, voz y video, y lo suma a la playlist.</li>
+<li><strong>Con IA:</strong> <code>python scripts/cargar_carreras.py</code> genera los clips de las carreras que todavía no tienen video, a partir de la ficha oficial de cada una. Para un clip suelto: <code>POST /api/v1/ai/clip</code> con un tema, un <code>nombre_archivo</code> que empiece con el prefijo de la facultad (por ejemplo <code>hum_grado_psicologia</code>) y, si querés, una placa de <code>media/placas</code>.</li>
 <li><strong>Un video propio:</strong> copiarlo a <code>media/videos</code> con el prefijo del bloque, ya normalizado a 1080p30 H.264/AAC. El scheduler lo toma en el próximo cambio de bloque.</li>
 </ol>
 <p>La documentación técnica de cada endpoint está en <a href="/docs">/docs</a>.</p>
@@ -324,7 +382,7 @@ It takes prepared video clips and streams them in a loop with ffmpeg. Programmin
 
 <h3>Programming schedule</h3>
 <table><thead><tr><th>Time slot (Argentina time)</th><th>Block</th><th>Files it streams</th></tr></thead><tbody>__GRILLA__</tbody></table>
-<p>Each block streams the clips whose name starts with its prefix. Prime Time and Study Lounge have no content of their own yet: meanwhile they repeat the institutional loop (<code>prueba_fondo_umsa*</code>).</p>
+<p>During the day, each of the five schools has its own time slot with all its undergraduate and graduate programs. From 22 to 7, all of the university's programs rotate. Each block streams the clips whose name starts with its prefix. Prime Time has no content of its own yet: meanwhile, like any empty block, it streams the rotation of all programs.</p>
 
 <h3>How it works</h3>
 <p>The <a href="#grafo-funcionamiento">how-it-works graph</a> reads from left to right:</p>
@@ -336,11 +394,11 @@ It takes prepared video clips and streams them in a loop with ffmpeg. Programmin
 </ul>
 
 <h3>What content there is</h3>
-<p>The <a href="#grafo-informacion">information graph</a> links each schedule block with the content it streams: undergraduate programs, graduate programs, institutional outreach and the daily agenda. Arrows to the fallback mark the blocks that still use the institutional loop.</p>
+<p>The <a href="#grafo-informacion">information graph</a> links each schedule block with the programs it streams, school by school, with their level (undergraduate or graduate) and format as listed on the official UMSA website. Arrows to the rotation mark the blocks that stream all programs.</p>
 
 <h3>How to add content</h3>
 <ol>
-<li><strong>With AI:</strong> <code>POST /api/v1/ai/clip</code> with a topic, a <code>nombre_archivo</code> starting with the block prefix (for example <code>foco_grado_medicina</code>) and, optionally, a slide from <code>media/placas</code>. It generates script, voice and video, and adds it to the playlist.</li>
+<li><strong>With AI:</strong> <code>python scripts/cargar_carreras.py</code> generates the clips for programs that have no video yet, from each program's official page. For a single clip: <code>POST /api/v1/ai/clip</code> with a topic, a <code>nombre_archivo</code> starting with the school prefix (for example <code>hum_grado_psicologia</code>) and, optionally, a slide from <code>media/placas</code>.</li>
 <li><strong>Your own video:</strong> copy it to <code>media/videos</code> with the block prefix, already normalized to 1080p30 H.264/AAC. The scheduler picks it up at the next block change.</li>
 </ol>
 <p>Technical documentation for each endpoint is at <a href="/docs">/docs</a>.</p>

@@ -85,15 +85,26 @@ def test_ambos_idiomas_comparten_el_dibujo():
     assert forma("es") == forma("en")
 
 
-def test_el_grafo_de_informacion_cubre_toda_la_grilla():
-    nombres = {b[2] for b in gen.BLOQUES}
-    prefijos = {b[4] for b in gen.BLOQUES}
-    assert nombres == {b.nombre for b in GRILLA}
-    assert prefijos == {b.prefijo for b in GRILLA}
-    es = client.get("/").text
+def test_el_grafo_de_informacion_cubre_toda_la_grilla_y_todas_las_carreras():
+    from app.core.catalogo import PROGRAMAS
+
+    assert [b[1] for b in gen.BLOQUES] == [b.nombre for b in GRILLA]
+    es, en = client.get("/").text, client.get("/en").text
     for bloque in GRILLA:
         assert bloque.nombre in es
-        assert gen.BLOQUE_EN[bloque.nombre] in client.get("/en").text
+        assert gen.BLOQUE_EN[bloque.nombre] in en
+    # Cada carrera del catálogo aparece con su nombre (los largos van partidos en líneas)
+    texto_es = " ".join(_Textos_de(es))
+    texto_en = " ".join(_Textos_de(en))
+    for p in PROGRAMAS:
+        assert " ".join(p.nombre.split()) in texto_es, p.nombre
+        assert " ".join(p.nombre_en.split()) in texto_en, p.nombre_en
+
+
+def _Textos_de(html):
+    p = _Textos()
+    p.feed(html)
+    return p.nodos
 
 
 def test_sin_canal_muestra_aviso_y_no_reproductor(monkeypatch):

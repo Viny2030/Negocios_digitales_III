@@ -45,9 +45,9 @@ def test_grilla_usa_hora_argentina_aunque_el_servidor_este_en_utc(monkeypatch):
     # 11:00 UTC (lo que marca el reloj de un contenedor en Railway) = 08:00 en Argentina.
     monkeypatch.setattr(scheduler_module, "datetime", _fecha_fija(11))
     assert scheduler_module.bloque_actual().nombre == "UMSA Despierta"
-    # 08:00 UTC = 05:00 en Argentina: todavía es Study Lounge (antes daba UMSA Despierta).
+    # 08:00 UTC = 05:00 en Argentina: todavía es el bloque nocturno (antes daba UMSA Despierta).
     monkeypatch.setattr(scheduler_module, "datetime", _fecha_fija(8))
-    assert scheduler_module.bloque_actual().nombre == "UMSA Study Lounge"
+    assert scheduler_module.bloque_actual().nombre == "UMSA Nocturno"
 
 
 def test_watchdog_pausa_y_retoma_solo_cuando_pasa_la_ventana(monkeypatch):

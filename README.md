@@ -22,6 +22,34 @@ bloque de la grilla). Todos los nodos llevan su nombre en los dos idiomas.
 - El JSON que antes devolvía `/` ahora está en `/api/v1/info`. `/` sigue
   respondiendo 200, así que el healthcheck no cambia.
 
+## Grilla: todas las carreras, por facultad
+
+| Franja (hora argentina) | Bloque | Archivos |
+|---|---|---|
+| 07–09 | UMSA Despierta (agenda, becas) | `umsa_despierta_*` |
+| 09–11 | Ciencias Jurídicas y Sociales | `jur_*` |
+| 11–13 | Ciencias Económicas | `eco_*` |
+| 13–15 | Ciencias Humanas | `hum_*` |
+| 15–17 | Lenguas Modernas | `len_*` |
+| 17–19 | Artes | `art_*` |
+| 19–22 | Prime Time (sin contenido propio → rotación de carreras) | `primetime_*` |
+| 22–07 | UMSA Nocturno: rotación de todas las carreras | todas |
+
+- La oferta académica (5 facultades, 36 carreras de grado y posgrado, tomada
+  de umsa.edu.ar) vive en **un solo lugar**: `app/core/catalogo.py`. De ahí
+  salen la grilla, el grafo del sitio y los nombres de archivo
+  (`<facultad>_<grado|posgrado>_<carrera>.mp4`).
+- `python scripts/cargar_carreras.py` muestra qué carreras ya tienen clip;
+  `--contexto` busca la ficha oficial de las que faltan (sin IA);
+  `--generar` las genera por `POST /ai/clip` a partir de esa ficha (gasta
+  crédito de IA; el servidor tiene que estar corriendo).
+- Los `.ps1` (`cargar_bloques.ps1` y compañía) quedaron **obsoletos**: generan
+  nombres de la grilla anterior (`foco_grado_*`, `posgrado_*`) que el scheduler
+  ya no programa. `cargar_carreras.py --renombrar` pasa esos clips al nombre nuevo.
+- Calidad de emisión: los clips se generan a `VIDEO_BITRATE_KBPS` (5000 por
+  default, CBR) con un keyframe cada 2 s, como pide YouTube.
+  `python scripts/renormalizar_clips.py --aplicar` recodifica los que no cumplen.
+
 ## Instalación y uso local
 
 ```bash

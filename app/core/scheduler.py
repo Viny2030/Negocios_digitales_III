@@ -19,14 +19,13 @@ un bloque (ver GRILLA) se suma automáticamente la próxima vez que el
 scheduler arme ese bloque — no hace falta tocar este archivo para sumar
 contenido nuevo a una franja existente.
 
-Bloques sin contenido propio todavía — Prime Time real (requiere que el
-equipo defina un calendario de webinars/paneles en vivo, no se puede generar
-solo) y Study Lounge (requiere una pista de música libre de derechos, que el
-pipeline actual de IA no genera — ai_service.py solo hace guion+voz, no
-música) — ver "Próximos pasos sugeridos" del plan de contenido. Mientras
-tanto caen a FALLBACK_PREFIX: repiten el video de fondo institucional en
-loop, para que la señal nunca se corte aunque todavía no haya contenido
-propio de esos bloques.
+Grilla por facultad (2026-11-27): una franja diurna para cada una de las 5
+facultades de core/catalogo.py y, de 22 a 7, una rotación de TODAS las
+carreras. Prime Time todavía no tiene contenido propio (requiere un
+calendario de webinars/paneles en vivo, no se puede generar solo): mientras
+tanto, como cualquier bloque vacío, cae a la rotación de todas las carreras
+y, si no hubiera ningún clip de carreras, a FALLBACK_PREFIX (el video de
+fondo institucional en loop), para que la señal nunca se corte.
 
 Testing manual sin esperar 24hs reales: POST /api/v1/stream/schedule/force
 (ver api/v1/stream.py) fuerza un recálculo ya mismo, opcionalmente simulando
@@ -42,6 +41,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.config import settings
+from app.core.catalogo import FACULTADES
 from app.core.playlist_io import escribir_playlist
 from app.core.streamer import streamer
 
@@ -55,30 +55,47 @@ FALLBACK_PREFIX = "prueba_fondo_umsa"
 # cambian en horas en punto, así que no hace falta más precisión que esta.
 INTERVALO_CHEQUEO_SEG = 60
 
+# Lo que el scheduler acepta como clip. Todo pasa por el perfil fijo de
+# media_service (1080p30 H.264/AAC), que /ai/clip y normalizar_clip escriben en .mp4.
+EXTENSIONES_VIDEO = {".mp4", ".m4v", ".mov", ".mkv"}
+
 
 @dataclass(frozen=True)
 class Bloque:
     nombre: str
     hora_inicio: int  # hora en settings.timezone (Argentina por default), 0-23, inclusive
     hora_fin: int  # exclusivo; si hora_fin <= hora_inicio, el bloque cruza medianoche
-    prefijo: str  # prefijo de nombre_archivo que agrupa los clips de este bloque
+    prefijos: tuple[str, ...]  # prefijos de nombre_archivo que agrupan los clips de este bloque
+    facultad: str | None = None  # clave de core/catalogo.FACULTADES, si es la franja de una facultad
 
     def activo_a_las(self, hora: int) -> bool:
         if self.hora_inicio < self.hora_fin:
             return self.hora_inicio <= hora < self.hora_fin
-        return hora >= self.hora_inicio or hora < self.hora_fin  # cruza medianoche (ej. Study Lounge)
+        return hora >= self.hora_inicio or hora < self.hora_fin  # cruza medianoche (ej. el nocturno)
 
 
-# Grilla completa — ver Claude outputs/plan_contenido_canal_umsa.md sección 2.
-# Los prefijos coinciden con los nombre_archivo usados en cargar_bloques.ps1
-# y en las llamadas manuales a POST /api/v1/ai/clip.
+# Todas las facultades: el bloque nocturno las rota, y es también el respaldo
+# de cualquier bloque que todavía no tenga clips propios (ej. Prime Time).
+PREFIJOS_CARRERAS = tuple(f.prefijo for f in FACULTADES.values())
+
+
+def _franja(clave: str, inicio: int, fin: int) -> Bloque:
+    f = FACULTADES[clave]
+    return Bloque(f.nombre.removeprefix("Facultad de "), inicio, fin, (f.prefijo,), facultad=clave)
+
+
+# Grilla por facultad (decidido 2026-11-27): una franja diurna por facultad
+# con sus carreras de grado y posgrado (prefijo jur_, eco_, hum_, len_, art_ —
+# ver core/catalogo.py), y de noche una rotación de todas las carreras.
 GRILLA: list[Bloque] = [
-    Bloque("UMSA Despierta", 7, 10, "umsa_despierta_"),
-    Bloque("Foco Grado y Vocación", 10, 13, "foco_grado_"),
-    Bloque("Extensión y Comunidad", 13, 16, "extension_"),
-    Bloque("Espacio Posgrados y Negocios", 16, 19, "posgrado_"),
-    Bloque("Prime Time: Clases Abiertas", 19, 22, "primetime_"),  # sin contenido propio todavía — ver docstring
-    Bloque("UMSA Study Lounge", 22, 7, "studylounge_"),  # sin contenido propio todavía — ver docstring
+    Bloque("UMSA Despierta", 7, 9, ("umsa_despierta_",)),
+    _franja("jur", 9, 11),
+    _franja("eco", 11, 13),
+    _franja("hum", 13, 15),
+    _franja("len", 15, 17),
+    _franja("art", 17, 19),
+    Bloque("Prime Time: Clases Abiertas", 19, 22, ("primetime_",)),  # sin contenido propio todavía — ver docstring
+    Bloque("UMSA Nocturno", 22, 7, PREFIJOS_CARRERAS),  # rotación de todas las carreras
 ]
 
 
@@ -96,27 +113,41 @@ def bloque_actual(hora: int | None = None) -> Bloque:
     raise RuntimeError(f"Ningún bloque de la grilla cubre la hora {hora} — revisar GRILLA en scheduler.py")
 
 
+def _videos_con_prefijo(*prefijos: str) -> list[str]:
+    """Solo archivos de video: un .srt, un .tmp o cualquier otro archivo con el
+    mismo prefijo que quede en media_dir no puede terminar en la playlist (ffmpeg
+    cortaría la emisión al llegarle el turno). Orden: por prefijo (en el orden
+    dado, ej. facultad por facultad) y dentro de cada uno alfabético, estable
+    entre reloads."""
+    archivos = [
+        p.name for p in settings.media_dir.iterdir() if p.is_file() and p.suffix.lower() in EXTENSIONES_VIDEO
+    ]
+    return [n for prefijo in prefijos for n in sorted(a for a in archivos if a.startswith(prefijo))]
+
+
 def _clips_para(bloque: Bloque) -> list[str]:
-    """Devuelve los nombres de archivo de `media_dir` que empiezan con el
-    prefijo del bloque, ordenados alfabéticamente (orden estable entre
-    reloads). Si no hay ninguno, cae al fallback institucional."""
+    """Devuelve los videos de `media_dir` de los prefijos del bloque. Si no hay
+    ninguno, cae a la rotación de todas las carreras y, si tampoco hay, al loop
+    institucional."""
     if not settings.media_dir.exists():
         return []
-    candidatos = sorted(
-        p.name for p in settings.media_dir.iterdir()
-        if p.is_file() and p.name.startswith(bloque.prefijo)
-    )
+    candidatos = _videos_con_prefijo(*bloque.prefijos)
     if candidatos:
         return candidatos
 
-    fallback = sorted(
-        p.name for p in settings.media_dir.iterdir()
-        if p.is_file() and p.name.startswith(FALLBACK_PREFIX)
-    )
+    carreras = _videos_con_prefijo(*PREFIJOS_CARRERAS)
+    if carreras:
+        logger.warning(
+            f"Bloque «{bloque.nombre}» no tiene clips propios ({', '.join(bloque.prefijos)}) — "
+            "usando la rotación de todas las carreras como respaldo."
+        )
+        return carreras
+
+    fallback = _videos_con_prefijo(FALLBACK_PREFIX)
     if fallback:
         logger.warning(
-            f"Bloque «{bloque.nombre}» no tiene clips propios (prefijo "
-            f"'{bloque.prefijo}') — usando el loop de fondo institucional como respaldo."
+            f"Bloque «{bloque.nombre}» no tiene clips propios ni hay clips de carreras — "
+            "usando el loop de fondo institucional como respaldo."
         )
         return fallback
 
@@ -143,7 +174,10 @@ class SchedulerBloques:
         while not self._detener.is_set():
             bloque = bloque_actual()
             if bloque.nombre != self._bloque_actual:
-                self._aplicar(bloque)
+                # En un hilo aparte: reload() hace stop() de ffmpeg, que puede
+                # esperar hasta 10 s; corrido directo en el loop de asyncio
+                # congelaba TODA la API (incluido el healthcheck) mientras tanto.
+                await asyncio.to_thread(self._aplicar, bloque)
             try:
                 await asyncio.wait_for(self._detener.wait(), timeout=INTERVALO_CHEQUEO_SEG)
             except TimeoutError:

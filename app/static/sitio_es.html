@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UMSA Vivo &amp; Conectada</title>
+<meta name="description" content="Canal institucional de la UMSA que transmite las 24 horas en YouTube Live.">
+<link rel="alternate" hreflang="es" href="/">
+<link rel="alternate" hreflang="en" href="/en">
+<style>
+:root { --fondo:#f7f7f5; --texto:#1d1d1b; --suave:#5c5c58; --borde:#d9d8d2; --tarjeta:#ffffff; --acento:#1f4e8c;
+  --fuente:#e6eefb; --fuente-b:#4a74b8; --proceso:#fdf0dc; --proceso-b:#c58a2b; --dato:#e5f4ea; --dato-b:#3f8f5a;
+  --publica:#f6e3ec; --publica-b:#a54a76; --arista:#8b8a84; }
+@media (prefers-color-scheme: dark) { :root { --fondo:#141413; --texto:#ecebe6; --suave:#a9a8a1; --borde:#3a3a37; --tarjeta:#1e1e1c;
+  --acento:#8fb4ee; --fuente:#1c2a42; --fuente-b:#7c9fd8; --proceso:#3a2d17; --proceso-b:#d9a64f; --dato:#18321f; --dato-b:#6cc08a;
+  --publica:#3a1d2b; --publica-b:#d784ab; --arista:#7d7c76; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--fondo); color:var(--texto); font:16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header, main, footer { max-width:1100px; margin:0 auto; padding:0 16px; }
+header { padding-top:24px; }
+h1 { margin:0 0 4px; font-size:1.7rem; }
+.sub { margin:0; color:var(--suave); }
+nav { display:flex; flex-wrap:wrap; gap:8px 18px; margin:16px 0 8px; padding-bottom:10px; border-bottom:1px solid var(--borde); }
+nav a { color:var(--acento); text-decoration:none; font-weight:600; }
+nav a.idioma { margin-left:auto; }
+a { color:var(--acento); }
+h2 { margin-top:40px; font-size:1.35rem; }
+h3 { margin-top:28px; font-size:1.08rem; }
+code { font-size:.9em; background:var(--tarjeta); border:1px solid var(--borde); border-radius:4px; padding:0 4px; }
+.vivo { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:16px; margin-top:16px; }
+@media (max-width: 760px) { .vivo { grid-template-columns:1fr; } }
+.marco { position:relative; aspect-ratio:16/9; background:#000; border-radius:8px; overflow:hidden; }
+.marco iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+.aviso { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; text-align:center; color:#ddd; }
+.subtitulo { min-height:3.4em; margin:8px 0 0; padding:8px 12px; background:var(--tarjeta); border:1px solid var(--borde);
+  border-radius:8px; text-align:center; white-space:pre-line; font-size:1.05rem; }
+.subtitulo.vacio { color:var(--suave); font-size:.92rem; }
+.estado { background:var(--tarjeta); border:1px solid var(--borde); border-radius:8px; padding:14px 16px; }
+.estado h2 { margin:0 0 8px; font-size:1.05rem; }
+.estado p { margin:6px 0; }
+.punto { display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--suave); margin-right:6px; }
+.punto.on { background:#2e9b55; } .punto.off { background:#c2453b; }
+table { border-collapse:collapse; width:100%; background:var(--tarjeta); }
+th, td { border:1px solid var(--borde); padding:6px 10px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
+.grafo { overflow-x:auto; background:var(--tarjeta); border:1px solid var(--borde); border-radius:8px; padding:8px; }
+.grafo svg { display:block; width:100%; min-width:640px; height:auto; margin:0 auto; }
+.nodo rect { stroke-width:1.5; }
+.c-fuente rect { fill:var(--fuente); stroke:var(--fuente-b); } .c-proceso rect { fill:var(--proceso); stroke:var(--proceso-b); }
+.c-dato rect { fill:var(--dato); stroke:var(--dato-b); } .c-publica rect { fill:var(--publica); stroke:var(--publica-b); }
+.leyenda .c-fuente { color:var(--fuente-b); } .leyenda .c-proceso { color:var(--proceso-b); }
+.leyenda .c-dato { color:var(--dato-b); } .leyenda .c-publica { color:var(--publica-b); }
+.leyenda span { margin-left:10px; }
+.t1 { font:600 14px system-ui, sans-serif; fill:var(--texto); } .t2 { font:12px system-ui, sans-serif; fill:var(--suave); }
+.col { font:600 13px system-ui, sans-serif; fill:var(--suave); text-anchor:middle; }
+.arista { fill:none; stroke:var(--arista); stroke-width:1.4; } .punta { fill:var(--arista); }
+footer { margin-top:48px; padding-bottom:32px; color:var(--suave); font-size:.9rem; }
+</style>
+</head>
+<body>
+<header>
+<h1>UMSA Vivo &amp; Conectada</h1>
+<p class="sub">Canal institucional de la UMSA que transmite las 24 horas en YouTube Live.</p>
+<nav><a href="#video">Video en vivo</a><a href="#manual">Manual</a><a href="#grafos">Grafos</a><a class="idioma" href="/en" hreflang="en">English</a></nav>
+</header>
+<main>
+<section id="video" class="vivo">
+<div>
+<div class="marco">__VIDEO__</div>
+<p id="subtitulo" class="subtitulo vacio" lang="es">Acá aparecen los subtítulos de lo que se está emitiendo.</p>
+</div>
+<aside class="estado" aria-live="polite">
+<h2>Estado de la emisión</h2>
+<p id="estado-emision">Consultando…</p>
+<p><strong>Bloque según la hora:</strong> <span id="estado-bloque">—</span></p>
+</aside>
+</section>
+
+<h2 id="manual">Manual</h2>
+<h3>Qué es</h3>
+<p>Un servicio que mantiene al aire, sin interrupciones, el canal de YouTube de la UMSA (Universidad del Museo Social Argentino).
+Toma clips de video ya preparados y los emite en loop con ffmpeg. La programación cambia sola según la hora argentina, siguiendo una grilla de seis bloques.</p>
+<p>Los clips nuevos se pueden producir con inteligencia artificial: un modelo de lenguaje redacta el guion, Piper lo convierte en voz (corre en el propio servidor, sin costo por uso) y ffmpeg arma el video con una placa institucional de fondo.</p>
+
+<h3>Cómo ver la transmisión</h3>
+<p>Arriba está el reproductor del canal en vivo. Al lado se ve si el servicio está emitiendo y qué bloque corresponde a la hora actual. Si el reproductor dice que no hay transmisión, el canal todavía no se configuró en esta página (variable <code>YOUTUBE_CHANNEL_ID</code>) o la emisión está detenida.</p>
+<p>Debajo del reproductor aparecen los subtítulos de lo que se está emitiendo (en inglés en la <a href="/en">versión en inglés</a> de esta página). Se calculan en el servidor a partir del guion de cada clip, así que pueden adelantarse o atrasarse unos segundos respecto del video de YouTube. Los videos propios, cargados sin pasar por la IA, no tienen subtítulos.</p>
+
+<h3>Grilla de programación</h3>
+<table><thead><tr><th>Franja (hora argentina)</th><th>Bloque</th><th>Archivos que emite</th></tr></thead><tbody><tr><td>07–09 h</td><td>UMSA Despierta</td><td><code>umsa_despierta_*</code></td></tr><tr><td>09–11 h</td><td>Ciencias Jurídicas y Sociales</td><td><code>jur_*</code></td></tr><tr><td>11–13 h</td><td>Ciencias Económicas</td><td><code>eco_*</code></td></tr><tr><td>13–15 h</td><td>Ciencias Humanas</td><td><code>hum_*</code></td></tr><tr><td>15–17 h</td><td>Lenguas Modernas</td><td><code>len_*</code></td></tr><tr><td>17–19 h</td><td>Artes</td><td><code>art_*</code></td></tr><tr><td>19–22 h</td><td>Prime Time: Clases Abiertas</td><td><code>primetime_*</code></td></tr><tr><td>22–07 h</td><td>UMSA Nocturno</td><td><code>jur_*</code> <code>eco_*</code> <code>hum_*</code> <code>len_*</code> <code>art_*</code></td></tr></tbody></table>
+<p>Durante el día, cada una de las cinco facultades tiene su franja con todas sus carreras de grado y posgrado. De 22 a 7 se rotan todas las carreras de la universidad. Cada bloque emite los clips cuyo nombre empieza con su prefijo. Prime Time todavía no tiene contenido propio: mientras tanto, como cualquier bloque vacío, emite la rotación de todas las carreras.</p>
+
+<h3>Cómo funciona</h3>
+<p>El <a href="#grafo-funcionamiento">grafo de funcionamiento</a> se lee de izquierda a derecha:</p>
+<ul>
+<li><strong>Fuentes:</strong> el operador (desde Swagger o con los scripts <code>.ps1</code>), el modelo de lenguaje (Anthropic, con OpenAI como respaldo), Piper para la voz, las placas institucionales y el reloj en hora argentina.</li>
+<li><strong>Procesos:</strong> <code>POST /ai/clip</code> encadena guion, voz y video. El scheduler revisa cada minuto qué bloque corresponde y reescribe la playlist. El streamer es ffmpeg emitiendo sin recodificar, y el watchdog lo reinicia si se cae solo.</li>
+<li><strong>Datos guardados:</strong> las voces en <code>media/audio</code>, los clips en <code>media/videos</code> y la lista de lo que se emite en <code>playlist.txt</code>.</li>
+<li><strong>Lo que publica:</strong> la señal de YouTube Live, la API de estado y esta página.</li>
+</ul>
+
+<h3>Qué contenido hay</h3>
+<p>El <a href="#grafo-informacion">grafo de información</a> une cada bloque de la grilla con las carreras que emite, facultad por facultad, con su nivel (grado o posgrado) y su modalidad según el sitio oficial de la UMSA. Las flechas hacia la rotación marcan los bloques que emiten todas las carreras.</p>
+
+<h3>Cómo cargar contenido</h3>
+<ol>
+<li><strong>Con IA:</strong> <code>python scripts/cargar_carreras.py</code> genera los clips de las carreras que todavía no tienen video, a partir de la ficha oficial de cada una. Para un clip suelto: <code>POST /api/v1/ai/clip</code> con un tema, un <code>nombre_archivo</code> que empiece con el prefijo de la facultad (por ejemplo <code>hum_grado_psicologia</code>) y, si querés, una placa de <code>media/placas</code>.</li>
+<li><strong>Un video propio:</strong> copiarlo a <code>media/videos</code> con el prefijo del bloque, ya normalizado a 1080p30 H.264/AAC. El scheduler lo toma en el próximo cambio de bloque.</li>
+</ol>
+<p>La documentación técnica de cada endpoint está en <a href="/docs">/docs</a>.</p>
+
+<h3>Protección</h3>
+<p>Ver esta página, el estado y la playlist es público. Arrancar o parar la emisión, tocar la playlist y generar contenido con IA exige el encabezado <code>X-Admin-Token</code>. En producción la app no arranca sin ese token, y sin modelo de lenguaje o de voz responde un error en vez de mandar al aire un guion simulado o un clip mudo.</p>
+
+<h3>Limitaciones conocidas</h3>
+<ul>
+<li>Cambiar de bloque reinicia ffmpeg: la señal se corta un par de segundos.</li>
+<li>Si un bloque queda sin clips y sin respaldo, la emisión se detiene y no vuelve sola al bloque siguiente: hay que arrancarla a mano.</li>
+<li>El modo producción se detecta solo dentro de Railway; en otro hosting hay que fijar <code>APP_ENV=production</code>.</li>
+<li>Todavía no hay subtítulos automáticos ni placas con datos en tiempo real.</li>
+</ul>
+
+
+<h2 id="grafos">Grafos</h2>
+<h3 id="grafo-funcionamiento">Grafo de funcionamiento</h3>
+<p>Cómo trabaja el canal: de dónde sale el contenido, qué procesos lo mueven, dónde se guarda y qué publica.</p>
+<div class="grafo"><svg viewBox="0 0 1020 560" style="max-width:1020px" role="img" aria-label="Grafo de funcionamiento del canal"><defs><marker id="flecha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="punta"/></marker></defs><text x="120" y="24" class="col">Fuentes</text><text x="380" y="24" class="col">Procesos</text><text x="640" y="24" class="col">Datos guardados</text><text x="900" y="24" class="col">Lo que publica</text><path d="M230,75 C250,75 250,149 266,149" class="arista" marker-end="url(#flecha)"/><path d="M230,149 C250,149 250,149 266,149" class="arista" marker-end="url(#flecha)"/><path d="M230,223 C250,223 250,149 266,149" class="arista" marker-end="url(#flecha)"/><path d="M230,297 C250,297 250,149 266,149" class="arista" marker-end="url(#flecha)"/><path d="M490,149 C510,149 510,105 526,105" class="arista" marker-end="url(#flecha)"/><path d="M490,149 C510,149 510,193 526,193" class="arista" marker-end="url(#flecha)"/><path d="M490,149 C510,149 510,297 526,297" class="arista" marker-end="url(#flecha)"/><path d="M230,371 C250,371 250,297 266,297" class="arista" marker-end="url(#flecha)"/><path d="M530,193 C490,193 530,297 494,297" class="arista" marker-end="url(#flecha)"/><path d="M490,297 C510,297 510,297 526,297" class="arista" marker-end="url(#flecha)"/><path d="M530,297 C490,297 530,408 494,408" class="arista" marker-end="url(#flecha)"/><path d="M380,464 L380,437" class="arista" marker-end="url(#flecha)"/><path d="M490,408 C640,408 640,341 786,341" class="arista" marker-end="url(#flecha)"/><path d="M490,408 C640,408 640,430 786,430" class="arista" marker-end="url(#flecha)"/><path d="M900,366 L900,490" class="arista" marker-end="url(#flecha)"/><path d="M900,455 L900,490" class="arista" marker-end="url(#flecha)"/><g class="nodo c-fuente"><rect x="10" y="50" width="220" height="50" rx="8"/><text x="20" y="71" class="t1">Operador</text><text x="20" y="89" class="t2">Swagger o scripts .ps1</text></g><g class="nodo c-fuente"><rect x="10" y="124" width="220" height="50" rx="8"/><text x="20" y="145" class="t1">Anthropic u OpenAI</text><text x="20" y="163" class="t2">redactan el guion</text></g><g class="nodo c-fuente"><rect x="10" y="198" width="220" height="50" rx="8"/><text x="20" y="219" class="t1">Piper</text><text x="20" y="237" class="t2">voz sintetizada local</text></g><g class="nodo c-fuente"><rect x="10" y="272" width="220" height="50" rx="8"/><text x="20" y="293" class="t1">Placas institucionales</text><text x="20" y="311" class="t2">media/placas</text></g><g class="nodo c-fuente"><rect x="10" y="346" width="220" height="50" rx="8"/><text x="20" y="367" class="t1">Reloj</text><text x="20" y="385" class="t2">hora argentina</text></g><g class="nodo c-proceso"><rect x="270" y="124" width="220" height="50" rx="8"/><text x="280" y="145" class="t1">POST /ai/clip</text><text x="280" y="163" class="t2">guion → voz → video</text></g><g class="nodo c-proceso"><rect x="270" y="272" width="220" height="50" rx="8"/><text x="280" y="293" class="t1">Scheduler de bloques</text><text x="280" y="311" class="t2">revisa cada 60 s</text></g><g class="nodo c-proceso"><rect x="270" y="383" width="220" height="50" rx="8"/><text x="280" y="404" class="t1">Streamer ffmpeg</text><text x="280" y="422" class="t2">emite sin recodificar</text></g><g class="nodo c-proceso"><rect x="270" y="464" width="220" height="50" rx="8"/><text x="280" y="485" class="t1">Watchdog</text><text x="280" y="503" class="t2">revisa cada 15 s</text></g><g class="nodo c-dato"><rect x="530" y="80" width="220" height="50" rx="8"/><text x="540" y="101" class="t1">media/audio</text><text x="540" y="119" class="t2">voces .wav</text></g><g class="nodo c-dato"><rect x="530" y="168" width="220" height="50" rx="8"/><text x="540" y="189" class="t1">media/videos</text><text x="540" y="207" class="t2">clips .mp4</text></g><g class="nodo c-dato"><rect x="530" y="272" width="220" height="50" rx="8"/><text x="540" y="293" class="t1">playlist.txt</text><text x="540" y="311" class="t2">lo que se emite ahora</text></g><g class="nodo c-publica"><rect x="790" y="316" width="220" height="50" rx="8"/><text x="800" y="337" class="t1">YouTube Live</text><text x="800" y="355" class="t2">señal RTMP 24/7</text></g><g class="nodo c-publica"><rect x="790" y="405" width="220" height="50" rx="8"/><text x="800" y="426" class="t1">API de estado</text><text x="800" y="444" class="t2">/api/v1/stream/…</text></g><g class="nodo c-publica"><rect x="790" y="494" width="220" height="50" rx="8"/><text x="800" y="515" class="t1">Esta página</text><text x="800" y="533" class="t2">video, manual y grafos</text></g></svg></div>
+<h3 id="grafo-informacion">Grafo de información</h3>
+<p>Qué emite cada bloque de la grilla.</p>
+<div class="grafo"><svg viewBox="0 0 810 2404" style="max-width:810px" role="img" aria-label="Grafo de información: bloques de la grilla y las carreras que emite cada uno"><defs><marker id="flecha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="punta"/></marker></defs><text x="120" y="24" class="col">Bloque de la grilla</text><text x="565" y="24" class="col">Carreras que emite</text><path d="M230,75 C280,75 280,75 326,75" class="arista" marker-end="url(#flecha)"/><path d="M230,379 C280,379 280,147 326,147" class="arista" marker-end="url(#flecha)"/><path d="M230,379 C280,379 280,205 326,205" class="arista" marker-end="url(#flecha)"/><path d="M230,379 C280,379 280,263 326,263" class="arista" marker-end="url(#flecha)"/><path d="M230,379 C280,379 280,321 326,321" class="arista" marker-end="url(#flecha)"/><path d="M230,379 C280,379 280,379 326,379" class="arista" marker-end="url(#flecha)"/><path d="M230,379 C280,379 280,437 326,437" class="arista" marker-end="url(#flecha)"/><path d="M230,379 C280,379 280,495 326,495" class="arista" marker-end="url(#flecha)"/><path d="M230,379 C280,379 280,553 326,553" class="arista" marker-end="url(#flecha)"/><path d="M230,379 C280,379 280,611 326,611" class="arista" marker-end="url(#flecha)"/><path d="M230,886 C280,886 280,683 326,683" class="arista" marker-end="url(#flecha)"/><path d="M230,886 C280,886 280,741 326,741" class="arista" marker-end="url(#flecha)"/><path d="M230,886 C280,886 280,799 326,799" class="arista" marker-end="url(#flecha)"/><path d="M230,886 C280,886 280,857 326,857" class="arista" marker-end="url(#flecha)"/><path d="M230,886 C280,886 280,915 326,915" class="arista" marker-end="url(#flecha)"/><path d="M230,886 C280,886 280,973 326,973" class="arista" marker-end="url(#flecha)"/><path d="M230,886 C280,886 280,1031 326,1031" class="arista" marker-end="url(#flecha)"/><path d="M230,886 C280,886 280,1089 326,1089" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1161 326,1161" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1219 326,1219" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1277 326,1277" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1335 326,1335" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1393 326,1393" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1460 326,1460" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1526 326,1526" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1584 326,1584" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1642 326,1642" class="arista" marker-end="url(#flecha)"/><path d="M230,1430 C280,1430 280,1700 326,1700" class="arista" marker-end="url(#flecha)"/><path d="M230,1859 C280,1859 280,1772 326,1772" class="arista" marker-end="url(#flecha)"/><path d="M230,1859 C280,1859 280,1830 326,1830" class="arista" marker-end="url(#flecha)"/><path d="M230,1859 C280,1859 280,1888 326,1888" class="arista" marker-end="url(#flecha)"/><path d="M230,1859 C280,1859 280,1946 326,1946" class="arista" marker-end="url(#flecha)"/><path d="M230,2142 C280,2142 280,2018 326,2018" class="arista" marker-end="url(#flecha)"/><path d="M230,2142 C280,2142 280,2084 326,2084" class="arista" marker-end="url(#flecha)"/><path d="M230,2142 C280,2142 280,2151 326,2151" class="arista" marker-end="url(#flecha)"/><path d="M230,2142 C280,2142 280,2209 326,2209" class="arista" marker-end="url(#flecha)"/><path d="M230,2142 C280,2142 280,2267 326,2267" class="arista" marker-end="url(#flecha)"/><path d="M230,2309 C280,2309 280,2339 326,2339" class="arista" marker-end="url(#flecha)"/><path d="M230,2369 C280,2369 280,2339 326,2339" class="arista" marker-end="url(#flecha)"/><g class="nodo c-proceso"><rect x="10" y="50" width="220" height="50" rx="8"/><text x="20" y="71" class="t1">UMSA Despierta</text><text x="20" y="89" class="t2">07–09 h · archivos umsa_despierta_*</text></g><g class="nodo c-proceso"><rect x="10" y="354" width="220" height="50" rx="8"/><text x="20" y="375" class="t1">Ciencias Jurídicas y Sociales</text><text x="20" y="393" class="t2">09–11 h · archivos jur_*</text></g><g class="nodo c-proceso"><rect x="10" y="861" width="220" height="50" rx="8"/><text x="20" y="882" class="t1">Ciencias Económicas</text><text x="20" y="900" class="t2">11–13 h · archivos eco_*</text></g><g class="nodo c-proceso"><rect x="10" y="1406" width="220" height="50" rx="8"/><text x="20" y="1426" class="t1">Ciencias Humanas</text><text x="20" y="1444" class="t2">13–15 h · archivos hum_*</text></g><g class="nodo c-proceso"><rect x="10" y="1834" width="220" height="50" rx="8"/><text x="20" y="1855" class="t1">Lenguas Modernas</text><text x="20" y="1873" class="t2">15–17 h · archivos len_*</text></g><g class="nodo c-proceso"><rect x="10" y="2118" width="220" height="50" rx="8"/><text x="20" y="2138" class="t1">Artes</text><text x="20" y="2156" class="t2">17–19 h · archivos art_*</text></g><g class="nodo c-proceso"><rect x="10" y="2284" width="220" height="50" rx="8"/><text x="20" y="2305" class="t1">Prime Time: Clases Abiertas</text><text x="20" y="2323" class="t2">19–22 h · archivos primetime_*</text></g><g class="nodo c-proceso"><rect x="10" y="2344" width="220" height="50" rx="8"/><text x="20" y="2365" class="t1">UMSA Nocturno</text><text x="20" y="2383" class="t2">22–07 h</text></g><g class="nodo c-dato"><rect x="330" y="50" width="470" height="50" rx="8"/><text x="340" y="71" class="t1">Agenda, becas y convocatorias</text><text x="340" y="89" class="t2">umsa_despierta_*</text></g><g class="nodo c-dato"><rect x="330" y="122" width="470" height="50" rx="8"/><text x="340" y="143" class="t1">Abogacía</text><text x="340" y="161" class="t2">Grado · presencial o virtual</text></g><g class="nodo c-dato"><rect x="330" y="180" width="470" height="50" rx="8"/><text x="340" y="201" class="t1">Licenciatura en Trabajo Social</text><text x="340" y="219" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="238" width="470" height="50" rx="8"/><text x="340" y="259" class="t1">Martillero Público y Corredor de Comercio</text><text x="340" y="277" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="296" width="470" height="50" rx="8"/><text x="340" y="317" class="t1">Licenciatura en Periodismo – Ciclo de Licenciatura</text><text x="340" y="335" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="354" width="470" height="50" rx="8"/><text x="340" y="375" class="t1">Doctorado en Ciencias Jurídicas</text><text x="340" y="393" class="t2">Posgrado · presencial o a distancia</text></g><g class="nodo c-dato"><rect x="330" y="412" width="470" height="50" rx="8"/><text x="340" y="433" class="t1">Posdoctorado en Ciencias Jurídicas</text><text x="340" y="451" class="t2">Posgrado · a distancia</text></g><g class="nodo c-dato"><rect x="330" y="470" width="470" height="50" rx="8"/><text x="340" y="491" class="t1">Maestría en Información Jurídica y Técnicas Legislativas</text><text x="340" y="509" class="t2">Posgrado · a distancia</text></g><g class="nodo c-dato"><rect x="330" y="528" width="470" height="50" rx="8"/><text x="340" y="549" class="t1">Maestría en Negociaciones Colectivas del Trabajo</text><text x="340" y="567" class="t2">Posgrado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="586" width="470" height="50" rx="8"/><text x="340" y="607" class="t1">Especialización en Derecho Procesal Penal</text><text x="340" y="625" class="t2">Posgrado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="658" width="470" height="50" rx="8"/><text x="340" y="679" class="t1">Contador Público</text><text x="340" y="697" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="716" width="470" height="50" rx="8"/><text x="340" y="737" class="t1">Licenciatura en Negocios Digitales</text><text x="340" y="755" class="t2">Grado · virtual</text></g><g class="nodo c-dato"><rect x="330" y="774" width="470" height="50" rx="8"/><text x="340" y="795" class="t1">Licenciatura en Bioeconomía y Nanoeconomía</text><text x="340" y="813" class="t2">Grado · virtual</text></g><g class="nodo c-dato"><rect x="330" y="832" width="470" height="50" rx="8"/><text x="340" y="853" class="t1">Licenciatura en Gestión Educativa – Ciclo de Licenciatura</text><text x="340" y="871" class="t2">Grado · virtual</text></g><g class="nodo c-dato"><rect x="330" y="890" width="470" height="50" rx="8"/><text x="340" y="911" class="t1">Profesorado Universitario</text><text x="340" y="929" class="t2">Grado · virtual</text></g><g class="nodo c-dato"><rect x="330" y="948" width="470" height="50" rx="8"/><text x="340" y="969" class="t1">Tecnicatura Universitaria en Seguros</text><text x="340" y="987" class="t2">Grado · a distancia</text></g><g class="nodo c-dato"><rect x="330" y="1006" width="470" height="50" rx="8"/><text x="340" y="1027" class="t1">Maestría en Consultoría en Gestión de Organizaciones</text><text x="340" y="1045" class="t2">Posgrado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1064" width="470" height="50" rx="8"/><text x="340" y="1085" class="t1">Maestría en Gobierno y Gestión de la Educación</text><text x="340" y="1103" class="t2">Posgrado · a distancia</text></g><g class="nodo c-dato"><rect x="330" y="1136" width="470" height="50" rx="8"/><text x="340" y="1157" class="t1">Licenciatura en Fonoaudiología</text><text x="340" y="1175" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1194" width="470" height="50" rx="8"/><text x="340" y="1215" class="t1">Licenciatura en Psicología</text><text x="340" y="1233" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1252" width="470" height="50" rx="8"/><text x="340" y="1273" class="t1">Licenciatura en Psicomotricidad</text><text x="340" y="1291" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1310" width="470" height="50" rx="8"/><text x="340" y="1331" class="t1">Tecnicatura en Psicomotricidad</text><text x="340" y="1349" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1368" width="470" height="50" rx="8"/><text x="340" y="1389" class="t1">Doctorado en Fonoaudiología</text><text x="340" y="1407" class="t2">Posgrado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1426" width="470" height="67" rx="8"/><text x="340" y="1445" class="t1">Maestría en abordaje de consumo de Sustancias Psicoactivas</text><text x="340" y="1462" class="t1">desde una perspectiva sociosanitaria</text><text x="340" y="1481" class="t2">Posgrado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1501" width="470" height="50" rx="8"/><text x="340" y="1522" class="t1">Maestría en Bioética</text><text x="340" y="1540" class="t2">Posgrado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1559" width="470" height="50" rx="8"/><text x="340" y="1580" class="t1">Especialización en Atención Temprana en Fonoaudiología</text><text x="340" y="1598" class="t2">Posgrado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1617" width="470" height="50" rx="8"/><text x="340" y="1638" class="t1">Especialización en Audiología</text><text x="340" y="1656" class="t2">Posgrado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1675" width="470" height="50" rx="8"/><text x="340" y="1696" class="t1">Especialización en Violencia Familiar</text><text x="340" y="1714" class="t2">Posgrado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1747" width="470" height="50" rx="8"/><text x="340" y="1768" class="t1">Intérprete de Conferencias en Idioma Inglés</text><text x="340" y="1786" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1805" width="470" height="50" rx="8"/><text x="340" y="1826" class="t1">Profesorado de Educación Superior en idioma Inglés</text><text x="340" y="1844" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="1863" width="470" height="50" rx="8"/><text x="340" y="1884" class="t1">Tecnicatura en Traducción Multimedia en idioma Inglés</text><text x="340" y="1902" class="t2">Grado · presencial o virtual</text></g><g class="nodo c-dato"><rect x="330" y="1921" width="470" height="50" rx="8"/><text x="340" y="1942" class="t1">Traductor/a Público/a en Idioma Inglés</text><text x="340" y="1960" class="t2">Grado · presencial o virtual</text></g><g class="nodo c-dato"><rect x="330" y="1993" width="470" height="50" rx="8"/><text x="340" y="2014" class="t1">Licenciatura en Artes Visuales</text><text x="340" y="2032" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="2051" width="470" height="67" rx="8"/><text x="340" y="2070" class="t1">Licenciatura en Conservación y Restauración de Bienes</text><text x="340" y="2087" class="t1">Culturales</text><text x="340" y="2106" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="2126" width="470" height="50" rx="8"/><text x="340" y="2147" class="t1">Licenciatura en Curaduría e Historia de las Artes</text><text x="340" y="2165" class="t2">Grado · presencial</text></g><g class="nodo c-dato"><rect x="330" y="2184" width="470" height="50" rx="8"/><text x="340" y="2205" class="t1">Tecnicatura Universitaria en Curaduría de las Artes</text><text x="340" y="2223" class="t2">Grado · virtual</text></g><g class="nodo c-dato"><rect x="330" y="2242" width="470" height="50" rx="8"/><text x="340" y="2263" class="t1">Maestría en Museología contemporánea</text><text x="340" y="2281" class="t2">Posgrado · a distancia</text></g><g class="nodo c-dato"><rect x="330" y="2314" width="470" height="50" rx="8"/><text x="340" y="2335" class="t1">Rotación de todas las carreras</text><text x="340" y="2353" class="t2">de 22 a 7 h y en los bloques sin clips propios</text></g></svg></div>
+<p class="leyenda"><span class="c-fuente">■</span> fuente <span class="c-proceso">■</span> proceso o bloque <span class="c-dato">■</span> dato o contenido <span class="c-publica">■</span> lo que publica</p>
+
+</main>
+<footer>Servicio FastAPI + ffmpeg · API técnica en /docs</footer>
+<script>
+(function () {
+  var T = {"al_aire": "Al aire", "detenida": "Detenida", "error": "No se pudo consultar el estado.", "idioma": "es", "subs_vacio": "Acá aparecen los subtítulos de lo que se está emitiendo.", "bloques": {"UMSA Despierta": "UMSA Despierta", "Ciencias Jurídicas y Sociales": "Ciencias Jurídicas y Sociales", "Ciencias Económicas": "Ciencias Económicas", "Ciencias Humanas": "Ciencias Humanas", "Lenguas Modernas": "Lenguas Modernas", "Artes": "Artes", "Prime Time: Clases Abiertas": "Prime Time: Clases Abiertas", "UMSA Nocturno": "UMSA Nocturno"}};
+  var estado = document.getElementById("estado-emision");
+  var bloque = document.getElementById("estado-bloque");
+  function poner(el, clase, texto) {
+    el.textContent = "";
+    if (clase) { var p = document.createElement("span"); p.className = "punto " + clase; el.appendChild(p); }
+    el.appendChild(document.createTextNode(texto));
+  }
+  function actualizar() {
+    fetch("/api/v1/stream/status").then(function (r) { return r.json(); }).then(function (s) {
+      poner(estado, s.running ? "on" : "off", s.running ? T.al_aire : T.detenida);
+    }).catch(function () { poner(estado, "", T.error); });
+    fetch("/api/v1/stream/schedule").then(function (r) { return r.json(); }).then(function (s) {
+      var nombre = s.bloque_calculado_ahora;
+      poner(bloque, "", T.bloques[nombre] || nombre);
+    }).catch(function () { poner(bloque, "", "—"); });
+  }
+  actualizar();
+  setInterval(actualizar, 30000);
+
+  // Subtítulos: el servidor manda los de los próximos ~20 s con tiempos
+  // relativos a su respuesta; acá se pintan con el reloj local y se vuelven
+  // a pedir cada 10 s (ver core/al_aire.py).
+  var sub = document.getElementById("subtitulo");
+  var cues = [];
+  function pedirSubs() {
+    fetch("/api/v1/stream/subtitulos?idioma=" + T.idioma).then(function (r) { return r.json(); }).then(function (s) {
+      var base = Date.now() / 1000;
+      cues = (s.cues || []).map(function (c) { return { a: base + c.desde, b: base + c.hasta, t: c.texto }; });
+    }).catch(function () { cues = []; });
+  }
+  function pintarSubs() {
+    var ahora = Date.now() / 1000, texto = "";
+    for (var i = 0; i < cues.length; i++) {
+      if (cues[i].a <= ahora && ahora < cues[i].b) { texto = cues[i].t; break; }
+    }
+    if (texto) { sub.textContent = texto; sub.className = "subtitulo"; }
+    else if (!cues.length) { sub.textContent = T.subs_vacio; sub.className = "subtitulo vacio"; }
+    else { sub.textContent = ""; sub.className = "subtitulo"; }  // pausa entre oraciones: sin parpadeo del aviso
+  }
+  pedirSubs();
+  setInterval(pedirSubs, 10000);
+  setInterval(pintarSubs, 250);
+})();
+</script>
+</body>
+</html>

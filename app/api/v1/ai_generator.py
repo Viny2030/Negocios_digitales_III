@@ -14,17 +14,25 @@ pantalla) — hoy el fondo es una imagen fija o un color sólido.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.v1.playlist import agregar
 from app.config import settings
 from app.core.auth import verificar_admin_token
 from app.core.rutas import NombreArchivo, resolver_imagen_fondo
 from app.schemas.playlist import AddClipRequest
-from app.services.ai_service import ServicioIAError, generar_guion, generar_voz
+from app.services.ai_service import (
+    ServicioIAError,
+    generar_guion,
+    generar_voz,
+    sintetizar_oraciones,
+    traducir_oraciones,
+)
 from app.services.media_service import MediaValidationError, armar_clip_narrado
+from app.services.subtitulos import dividir_oraciones, generar_srt, guardar_srt
 
 router = APIRouter(prefix="/ai", tags=["ai"], dependencies=[Depends(verificar_admin_token)])
 
@@ -55,13 +63,29 @@ class ClipRequest(BaseModel):
     voice_id: NombreArchivo | None = None  # modelo de voz Piper para este bloque (ver plan de contenido)
     imagen_fondo: str | None = None  # ruta a una placa dentro de media/ (ej. media/placas/umsa_fondo.png)
     color_fondo: str = "black"  # se usa solo si no se pasa imagen_fondo
+    # Franja inferior del video (ej. "Licenciatura en Psicología" / "Facultad
+    # de Ciencias Humanas"). None = sin rótulo.
+    rotulo: str | None = Field(default=None, max_length=160)
+    rotulo_secundario: str | None = Field(default=None, max_length=120)
     agregar_a_playlist: bool = True
+    # Subtítulos .srt a generar (ver services/subtitulos.py). "es" sale del
+    # guion tal cual; "en" cuesta una llamada extra al LLM (traducción). []
+    # = sin subtítulos.
+    subtitulos: list[Literal["es", "en"]] = ["es", "en"]
+    # Guion ya escrito (y revisado) en vez de pedírselo al LLM: no gasta
+    # crédito de API. `guion_en` es su traducción, UNA entrada por oración del
+    # guion y en el mismo orden (ver services/subtitulos.dividir_oraciones);
+    # si falta y se piden subtítulos "en", se traduce con el LLM.
+    guion: str | None = Field(default=None, max_length=6000)
+    guion_en: list[str] | None = None
 
 
 class ClipResponse(BaseModel):
     guion: str
+    guion_en: list[str] | None = None  # traducción, una entrada por oración del guion
     ruta_audio: str
     ruta_video: str
+    subtitulos: dict[str, str] = {}  # idioma → ruta del .srt
     en_playlist: bool
 
 
@@ -97,17 +121,40 @@ def crear_clip(body: ClipRequest) -> ClipResponse:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
+    if body.guion is not None and body.guion_en is not None:
+        n = len(dividir_oraciones(body.guion))
+        if len(body.guion_en) != n:
+            raise HTTPException(
+                status_code=422,
+                detail=f"guion_en tiene {len(body.guion_en)} oraciones y el guion {n}: tienen que coincidir una a una",
+            )
+
     try:
-        guion = generar_guion(body.tema, body.contexto)
-        ruta_audio = generar_voz(guion, body.nombre_archivo, voice_id=body.voice_id)
+        guion = body.guion if body.guion is not None else generar_guion(body.tema, body.contexto)
+        oraciones = dividir_oraciones(guion)
+        # La traducción va ANTES de la voz y del video: si falla, no se
+        # dejan a medio armar un wav y un mp4 sin sus subtítulos.
+        guion_en = None
+        if "en" in body.subtitulos:
+            guion_en = body.guion_en if body.guion_en is not None else traducir_oraciones(oraciones)
+        voz = sintetizar_oraciones(oraciones, body.nombre_archivo, voice_id=body.voice_id)
     except ServicioIAError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
 
     ruta_video = settings.media_dir / f"{body.nombre_archivo}.mp4"
     try:
-        armar_clip_narrado(ruta_audio, ruta_video, imagen_fondo=imagen, color_fondo=body.color_fondo)
+        armar_clip_narrado(
+            voz.ruta, ruta_video, imagen_fondo=imagen, color_fondo=body.color_fondo,
+            rotulo=body.rotulo, rotulo_secundario=body.rotulo_secundario,
+        )
     except MediaValidationError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+    textos_por_idioma = {"es": voz.oraciones, "en": guion_en}
+    subtitulos = {
+        idioma: str(guardar_srt(body.nombre_archivo, idioma, generar_srt(textos_por_idioma[idioma], voz.tiempos)))
+        for idioma in body.subtitulos
+    }
 
     en_playlist = False
     if body.agregar_a_playlist:
@@ -122,7 +169,9 @@ def crear_clip(body: ClipRequest) -> ClipResponse:
 
     return ClipResponse(
         guion=guion,
-        ruta_audio=str(ruta_audio),
+        guion_en=guion_en,
+        ruta_audio=str(voz.ruta),
         ruta_video=str(ruta_video),
+        subtitulos=subtitulos,
         en_playlist=en_playlist,
     )

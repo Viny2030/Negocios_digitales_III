@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     # a mano desde POST /api/v1/stream/start.
     autostart: bool = False
 
+    # Bitrate de video (CBR) con el que se generan los clips 1080p30 (ver
+    # services/media_service.py). YouTube recomienda ~4-10 Mbps; por debajo
+    # avisa "tasa de bits inferior a la recomendada". OJO costo: la emisión
+    # 24/7 sube esto sin parar (5000 kbps ≈ 54 GB/día ≈ 1,6 TB/mes de salida).
+    video_bitrate_kbps: int = 5000
+    # Fuente .ttf del rótulo (nombre de carrera y facultad) de los clips. Vacío =
+    # DejaVu Sans Bold en la imagen Docker o Segoe UI / Arial en Windows.
+    fuente_rotulos: str = ""
+
     # --- Playlist / medios ---
     # Raíz de medios: `imagen_fondo` (POST /ai/clip) solo puede apuntar a un
     # archivo dentro de esta carpeta (ej. media/placas/...), nunca a una ruta
@@ -99,15 +108,38 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
 
     # --- TTS (voz) — Piper: motor neuronal local (pip install piper-tts),
-    # sin costo ni cuota. generar_voz() en services/ai_service.py busca el
-    # modelo <voice_id o piper_voice_default>.onnx (+ su .onnx.json) dentro
-    # de tts_models_dir; si no lo encuentra, cae a un wav de silencio (mismo
-    # comportamiento de placeholder que antes con ElevenLabs cuando faltaba
-    # la API key, para no bloquear el resto del pipeline).
-    piper_bin: str = "piper"
+    # sin costo ni cuota. sintetizar_oraciones() en services/ai_service.py
+    # carga el modelo <voice_id o piper_voice_default>.onnx (+ su .onnx.json)
+    # de tts_models_dir con la API de Python de Piper (en el mismo proceso, ya
+    # no como subproceso); si no lo encuentra, en desarrollo cae a un wav de
+    # silencio y en producción falla con un error claro.
     tts_models_dir: Path = Path("media/tts")
     piper_voice_default: str = "es_AR-daniela-high"
     audio_dir: Path = Path("media/audio")
+
+    # --- Subtítulos (ver services/subtitulos.py) ---
+    # Dónde se guardan los .srt (español e inglés) de cada clip. Vacío = una
+    # subcarpeta de media_dir, para que en Railway queden dentro del Volume
+    # (persisten entre deploys junto a los clips).
+    subtitulos_dir: Path | None = None
+    # El sitio (/ y /en) muestra debajo del reproductor el subtítulo de lo que
+    # se está emitiendo, calculado en el servidor (ver core/al_aire.py). Pero
+    # quien mira el embed de YouTube ve la señal con demora (latencia normal:
+    # ~15-60 s), así que el subtítulo se atrasa esta cantidad de segundos para
+    # coincidir con el video. Calibrar una vez con la transmisión real.
+    subtitulos_demora_seg: float = 20.0
+    # Subtítulos (pista CC) DENTRO de YouTube: URL de ingesta del evento
+    # (YouTube Studio → evento con latencia "Normal" → Subtítulos → "Publicar
+    # subtítulos en URL"). Es una URL firmada: tratarla como secreto, igual que
+    # RTMP_STREAM_KEY. Vacía = no se envían. YouTube admite UNA sola pista.
+    youtube_captions_url: str = ""
+    youtube_captions_idioma: Literal["es", "en"] = "en"
+
+    # --- Página pública (/ y /en, ver app/web.py) ---
+    # ID del canal de YouTube cuyo vivo se muestra en la página (empieza con
+    # "UC", 24 caracteres; YouTube Studio → Configuración → Canal → Configuración
+    # avanzada). Vacío = la página muestra un aviso en lugar del reproductor.
+    youtube_channel_id: str = ""
 
     log_level: str = "INFO"
 
@@ -116,6 +148,8 @@ class Settings(BaseSettings):
         if self.app_env is None:
             en_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT_NAME") or os.environ.get("RAILWAY_ENVIRONMENT"))
             self.app_env = "production" if en_railway else "development"
+        if self.subtitulos_dir is None:
+            self.subtitulos_dir = self.media_dir / "subtitulos"
         return self
 
     @property
@@ -127,4 +161,5 @@ settings = Settings()
 settings.media_dir.mkdir(parents=True, exist_ok=True)
 settings.audio_dir.mkdir(parents=True, exist_ok=True)
 settings.tts_models_dir.mkdir(parents=True, exist_ok=True)
+settings.subtitulos_dir.mkdir(parents=True, exist_ok=True)
 settings.playlist_path.parent.mkdir(parents=True, exist_ok=True)

@@ -5,7 +5,7 @@
 FROM python:3.12-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /srv
@@ -26,8 +26,9 @@ RUN python -m piper.download_voices --download-dir /srv/tts_models ${PIPER_VOICE
 
 COPY app ./app
 # El contenido real de media/videos vive en el Volume persistente de
-# Railway (montado en runtime), no en la imagen — acá solo se copia la
-# playlist inicial (vacía) y la estructura de carpetas.
+# Railway (montado en runtime), no en la imagen — acá solo se copian las
+# placas (media/placas, que usa /ai/clip) y la estructura de carpetas. La
+# playlist no viaja en la imagen: la escribe el scheduler al arrancar.
 COPY media ./media
 
 ENV PYTHONUNBUFFERED=1

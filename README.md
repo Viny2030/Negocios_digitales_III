@@ -5,6 +5,58 @@ Servicio FastAPI que controla la emisión 24/7 en YouTube Live (vía FFmpeg
 voz) con IA — scaffold inicial a partir del documento de arquitectura del
 proyecto.
 
+## Página pública: video en vivo, manual y grafos
+
+`/` (español) y `/en` (inglés) muestran el reproductor del canal en vivo, el
+estado de la emisión, el manual y dos grafos: **funcionamiento** (fuentes →
+procesos → datos guardados → lo que publica) e **información** (qué emite cada
+bloque de la grilla). Todos los nodos llevan su nombre en los dos idiomas.
+
+- El reproductor usa `YOUTUBE_CHANNEL_ID` (ID del canal, empieza con `UC`; ver
+  `.env.example`). Sin esa variable la página muestra un aviso en su lugar.
+- Los HTML (`app/static/sitio_es.html` y `sitio_en.html`) se generan con
+  `python scripts/generar_sitio.py`: no editarlos a mano. Si cambiás textos,
+  grafos o la grilla, volvé a correrlo y commiteá los dos archivos
+  (`tests/test_sitio.py` falla si quedaron desactualizados o si la grilla de
+  `core/scheduler.py` y la del grafo no coinciden).
+- El JSON que antes devolvía `/` ahora está en `/api/v1/info`. `/` sigue
+  respondiendo 200, así que el healthcheck no cambia.
+
+## Grilla: todas las carreras, por facultad
+
+| Franja (hora argentina) | Bloque | Archivos |
+|---|---|---|
+| 07–09 | UMSA Despierta (agenda, becas) | `umsa_despierta_*` |
+| 09–11 | Ciencias Jurídicas y Sociales | `jur_*` |
+| 11–13 | Ciencias Económicas | `eco_*` |
+| 13–15 | Ciencias Humanas | `hum_*` |
+| 15–17 | Lenguas Modernas | `len_*` |
+| 17–19 | Artes | `art_*` |
+| 19–22 | Prime Time (sin contenido propio → rotación de carreras) | `primetime_*` |
+| 22–07 | UMSA Nocturno: rotación de todas las carreras | todas |
+
+- La oferta académica (5 facultades, 36 carreras de grado y posgrado, tomada
+  de umsa.edu.ar) vive en **un solo lugar**: `app/core/catalogo.py`. De ahí
+  salen la grilla, el grafo del sitio y los nombres de archivo
+  (`<facultad>_<grado|posgrado>_<carrera>.mp4`).
+- `python scripts/cargar_carreras.py` muestra qué carreras ya tienen clip;
+  `--contexto` busca la ficha oficial de las que faltan (sin IA);
+  `--generar` las genera por `POST /ai/clip` a partir de esa ficha (gasta
+  crédito de IA; el servidor tiene que estar corriendo).
+- **Guiones escritos a mano** en `contenido/guiones/<archivo>.json` (`fuente`
+  = ficha oficial, `guion`, `guion_en` con una traducción por oración,
+  `revisado`): si existe, `--generar` lo usa tal cual y **no llama a la API de
+  Anthropic**; `--sin-ia` saltea las carreras sin guion escrito y
+  `--validar-guiones` comprueba la correspondencia de oraciones. Ojo: la
+  suscripción de Claude (claude.ai / Claude Code) no incluye crédito de API;
+  la generación automática por LLM necesita saldo propio en la Console.
+- Los `.ps1` (`cargar_bloques.ps1` y compañía) quedaron **obsoletos**: generan
+  nombres de la grilla anterior (`foco_grado_*`, `posgrado_*`) que el scheduler
+  ya no programa. `cargar_carreras.py --renombrar` pasa esos clips al nombre nuevo.
+- Calidad de emisión: los clips se generan a `VIDEO_BITRATE_KBPS` (5000 por
+  default, CBR) con un keyframe cada 2 s, como pide YouTube.
+  `python scripts/renormalizar_clips.py --aplicar` recodifica los que no cumplen.
+
 ## Instalación y uso local
 
 ```bash
@@ -42,7 +94,7 @@ a un servidor RTMP local (ej. `mediamtx`) en vez de a YouTube.
    ```
 3. Agregarlo a la playlist: `POST /api/v1/playlist` con
    `{"filename": "original_norm.mp4"}`.
-4. Si el streamer ya está corriendo, `POST /api/v1/playlist/reload` para
+4. Si el streamer ya está corriendo, `POST /api/v1/stream/reload` para
    que tome el cambio (corta la señal un par de segundos, ver limitación
    documentada en `core/streamer.py`).
 
@@ -113,9 +165,28 @@ Si el streamer ya está corriendo, después de agregar un clip hace falta
 `POST /api/v1/stream/reload` para que lo tome (corta la señal un par de
 segundos, ver limitación documentada en `core/streamer.py`).
 
-**Todavía pendiente** (no cubierto por `/clip`): subtítulos automáticos y
-placas dinámicas con datos en tiempo real (fecha, clima, agenda en
-pantalla) — hoy el fondo es estático (imagen fija o color).
+### Subtítulos en español e inglés
+
+`/ai/clip` genera además dos `.srt` por clip (campo `subtitulos`, default
+`["es", "en"]`; `[]` = sin subtítulos), en `SUBTITULOS_DIR` (default
+`media/videos/subtitulos`, dentro del Volume en Railway):
+
+- La voz se sintetiza **oración por oración** con Piper, así que los tiempos
+  de cada subtítulo son exactos, no estimados.
+- El inglés lo traduce el mismo LLM del guion (Anthropic → OpenAI), una
+  traducción por oración: hereda los tiempos de la oración en español. Si el
+  modelo devuelve otra cantidad de oraciones, se prueba el otro proveedor y,
+  si tampoco, responde 503 (mejor eso que subtítulos desincronizados).
+- Cuesta una llamada extra al LLM por clip. Máximo 2 líneas de 42
+  caracteres por subtítulo.
+
+Cómo llegan esos subtítulos a YouTube (pista CC en inglés) está pendiente:
+requiere el evento en **latencia normal** y YouTube admite **una sola pista**
+de subtítulos por transmisión.
+
+**Todavía pendiente** (no cubierto por `/clip`): placas dinámicas con datos
+en tiempo real (fecha, clima, agenda en pantalla) — hoy el fondo es estático
+(imagen fija o color).
 
 ## Deploy en Railway
 

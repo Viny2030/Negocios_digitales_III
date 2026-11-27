@@ -31,10 +31,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app import web
 from app.api.v1.router import router as router_v1
 from app.config import settings
 from app.core.scheduler import scheduler
 from app.core.streamer import streamer
+from app.core.subtitulos_youtube import emisor_subtitulos
 from app.core.watchdog import watchdog
 
 logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -58,6 +60,7 @@ async def lifespan(app: FastAPI):
         scheduler.start()
     if settings.watchdog_enabled:
         watchdog.start()
+    emisor_subtitulos.start()  # no hace nada si YOUTUBE_CAPTIONS_URL está vacía
     if settings.autostart:
         try:
             logger.info("AUTOSTART=true — arrancando el streamer al levantar el servicio")
@@ -66,6 +69,7 @@ async def lifespan(app: FastAPI):
             logger.error(f"No se pudo autostart-ear el streamer: {e}")
     yield
     logger.info("Apagando servicio — deteniendo el streamer, el scheduler y el watchdog si estaban corriendo")
+    emisor_subtitulos.stop()
     watchdog.stop()
     scheduler.stop()
     streamer.stop()
@@ -77,8 +81,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(router_v1, prefix="/api/v1")
+# Página pública (video en vivo, manual y grafos en / y /en). Antes "/"
+# devolvía un JSON; ese dato ahora está en /api/v1/info. "/" sigue
+# respondiendo 200, así que el healthcheck de railway.toml no cambia.
+app.include_router(web.router)
 
 
-@app.get("/")
-def raiz() -> dict:
-    return {"servicio": "umsa-stream-engine", "docs": "/docs"}
+@app.get("/api/v1/info")
+def info() -> dict:
+    return {"servicio": "umsa-stream-engine", "docs": "/docs", "sitio": {"es": "/", "en": "/en"}}

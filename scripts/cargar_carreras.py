@@ -6,7 +6,10 @@ scripts/cargar_carreras.py — Clips de todas las carreras de la UMSA (core/cata
     python scripts/cargar_carreras.py --contexto      # busca la ficha oficial de las que faltan y muestra qué se usaría (sin IA)
     python scripts/cargar_carreras.py --generar [--limite N] [--api http://127.0.0.1:8000] [--sin-ia]
                                                       # genera con POST /api/v1/ai/clip las que faltan
+    python scripts/cargar_carreras.py --generar --sin-ia --sin-subtitulos
+                                                      # además rehace los clips con guion escrito que no tienen .srt
     python scripts/cargar_carreras.py --validar-guiones
+    python scripts/cargar_carreras.py --rehacer-viejos  # solo el video (movimiento y rótulo) reutilizando la voz, sin guion
 
 Guiones escritos a mano: si existe contenido/guiones/<nombre_archivo>.json
 ({"fuente": url, "guion": "...", "guion_en": [una traducción por oración]}),
@@ -161,6 +164,37 @@ def renombrar() -> None:
         print(f"  {origen.name} -> {destino.name}")
 
 
+def rehacer_viejos() -> int:
+    """Rehace el VIDEO de los clips de la grilla anterior (placa fija) con
+    movimiento y rótulo, reutilizando la narración que ya tienen: el audio se
+    toma del propio .mp4, así no cambia lo que se escucha y no se gasta IA.
+    Se escribe a un temporal y recién al final reemplaza al original."""
+    from app.services.media_service import MediaValidationError, armar_clip_narrado
+
+    por_archivo = {p.nombre_archivo: p for p in PROGRAMAS}
+    errores = 0
+    for nuevo in RENOMBRES_ANTERIORES.values():
+        p = por_archivo[nuevo]
+        clip = settings.media_dir / f"{nuevo}.mp4"
+        if not clip.exists():
+            print(f"  -- {nuevo}: no existe, se saltea")
+            continue
+        tmp = clip.with_name(f"{nuevo}.rehecho.tmp.mp4")
+        try:
+            armar_clip_narrado(
+                clip, tmp, imagen_fondo=Path(p.placa), rotulo=p.nombre,
+                rotulo_secundario=f"{FACULTADES[p.facultad].nombre} · {p.nivel.capitalize()} · {p.modalidad}",
+            )
+        except MediaValidationError as e:
+            errores += 1
+            tmp.unlink(missing_ok=True)
+            print(f"  ERROR {nuevo}: {e}")
+            continue
+        os.replace(tmp, clip)
+        print(f"  OK  {nuevo}")
+    return 1 if errores else 0
+
+
 def guion_escrito(p: Programa) -> dict | None:
     """Guion ya escrito y revisado en contenido/guiones/<nombre_archivo>.json
     ({"guion": "...", "guion_en": [...]}): se usa en vez de pedírselo al LLM."""
@@ -184,8 +218,19 @@ def validar_guiones() -> int:
     return 1 if errores else 0
 
 
-def generar(api: str, limite: int | None, mostrar_solo: bool, sin_ia: bool = False) -> int:
-    faltantes = [p for p in PROGRAMAS if not tiene_clip(p)][:limite]
+def generar(
+    api: str, limite: int | None, mostrar_solo: bool, sin_ia: bool = False, rehacer_sin_subtitulos: bool = False
+) -> int:
+    """`rehacer_sin_subtitulos`: además de las que no tienen clip, rehace las
+    que tienen guion escrito pero todavía no tienen subtítulos (ej. los clips
+    de la grilla anterior, generados antes de que existieran los .srt)."""
+
+    def pendiente(p: Programa) -> bool:
+        if not tiene_clip(p):
+            return True
+        return rehacer_sin_subtitulos and guion_escrito(p) is not None and not ruta_subtitulos(p.nombre_archivo, "en").exists()
+
+    faltantes = [p for p in PROGRAMAS if pendiente(p)][:limite]
     headers = {"X-Admin-Token": os.environ["ADMIN_TOKEN"]} if os.environ.get("ADMIN_TOKEN") else {}
     errores = 0
     for p in faltantes:
@@ -231,10 +276,15 @@ def main() -> int:
         return 0
     if "--validar-guiones" in args:
         return validar_guiones()
+    if "--rehacer-viejos" in args:
+        return rehacer_viejos()
     if "--contexto" in args or "--generar" in args:
         limite = int(args[args.index("--limite") + 1]) if "--limite" in args else None
         api = args[args.index("--api") + 1] if "--api" in args else "http://127.0.0.1:8000"
-        return generar(api, limite, mostrar_solo="--generar" not in args, sin_ia="--sin-ia" in args)
+        return generar(
+            api, limite, mostrar_solo="--generar" not in args, sin_ia="--sin-ia" in args,
+            rehacer_sin_subtitulos="--sin-subtitulos" in args,
+        )
     estado()
     return 0
 

@@ -37,14 +37,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TypeVar
 
 from app.config import settings
 from app.services.subtitulos import dividir_oraciones
 
 logger = logging.getLogger("ai_service")
 
-T = TypeVar("T")
 
 # Pausa que se inserta entre oraciones en el wav final: Piper sintetiza cada
 # oración sin silencio al final, y pegadas una detrás de otra suenan apuradas.
@@ -114,7 +112,7 @@ def _completar_openai(sistema: str, usuario: str, max_tokens: int) -> str:
     return respuesta.choices[0].message.content or ""
 
 
-def _completar(
+def _completar[T](
     sistema: str,
     usuario: str,
     tarea: str,
